@@ -2,10 +2,12 @@
 
 Production / REQUIRE_AUTH: TITAN_API_TOKEN is mandatory (process refuses to start
 without it — see main lifespan). Development without a token: loopback-only
-writes when ALLOW_UNAUTHENTICATED_LOOPBACK is true.
+writes when ALLOW_UNAUTHENTICATED_LOOPBACK is true (default false).
+ADB always requires a configured API token.
 """
 from __future__ import annotations
 
+import hashlib
 import hmac
 import secrets
 from typing import TYPE_CHECKING, Annotated, Optional
@@ -15,7 +17,7 @@ if TYPE_CHECKING:
 
 try:
     from fastapi import Header, HTTPException, Request
-except ImportError:  # unit tests that only need tokens_equal / assert_boot_auth
+except ImportError:
     Header = object  # type: ignore
     HTTPException = Exception  # type: ignore
     Request = object  # type: ignore
@@ -27,13 +29,14 @@ def is_loopback(request: Request) -> bool:
 
 
 def tokens_equal(presented: str, expected: str) -> bool:
-    """Constant-time compare; different lengths always fail without raising."""
+    """Constant-time compare via SHA-256 digests (safe for any unicode; no TypeError)."""
+    if not isinstance(presented, str) or not isinstance(expected, str):
+        return False
     if not presented or not expected:
         return False
-    if len(presented) != len(expected):
-        hmac.compare_digest(presented, presented)
-        return False
-    return hmac.compare_digest(presented, expected)
+    a = hashlib.sha256(presented.encode("utf-8")).digest()
+    b = hashlib.sha256(expected.encode("utf-8")).digest()
+    return hmac.compare_digest(a, b)
 
 
 def require_bearer(
@@ -73,6 +76,11 @@ def require_adb_enabled() -> None:
             status_code=403,
             detail="adb_disabled: set ADB_ENABLED=true to allow device capture",
         )
+    if not settings.api_token:
+        raise HTTPException(
+            status_code=403,
+            detail="adb_requires_token: set TITAN_API_TOKEN before enabling ADB",
+        )
 
 
 def generate_token() -> str:
@@ -80,7 +88,6 @@ def generate_token() -> str:
 
 
 def assert_boot_auth() -> None:
-    """Call at process start. Production without a token must not serve traffic."""
     from titan.config import settings
 
     if (settings.require_auth or settings.env == "production") and not settings.api_token:

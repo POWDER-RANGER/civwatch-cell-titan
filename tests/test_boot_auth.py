@@ -23,3 +23,10 @@ def test_tokens_equal_constant_time():
     assert tokens_equal("abcd", "abce") is False
     assert tokens_equal("short", "longer_token") is False
     assert tokens_equal("", "x") is False
+
+
+def test_tokens_equal_unicode():
+    from titan.auth import tokens_equal
+
+    assert tokens_equal("café-token", "café-token") is True
+    assert tokens_equal("café-token", "cafe-token") is False
