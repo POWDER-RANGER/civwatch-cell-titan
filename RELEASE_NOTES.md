@@ -1,40 +1,30 @@
-# CELL TITAN v0.1.0 — Public operational release
+# CELL TITAN v0.1.1 — Assurance release
 
 **Date:** 2026-10-03  
-**Tag suggestion:** `v0.1.0`
+**Tag suggestion:** `v0.1.1`
 
-## Highlights
+## Assurance deltas vs 0.1.0
 
-- Full FastAPI service with OpenAPI at `/docs`
-- Hash-chained evidence log (`titan/evidence.py`) with verify + tail
-- Demo telemetry across cellular, Wi-Fi, D2D, transport (no hardware required)
-- Optional ADB sensor discovery and cellular/Wi-Fi dump capture
-- WebSocket live stream at `/ws/live`
-- Operator dashboard at `/`
-- 11 automated tests + GitHub Actions CI
-- SECURITY.md, CONTRIBUTING.md, CHANGELOG.md, MIT license
-
-## Run
-
-```bash
-pip install -r requirements.txt
-./launch.sh
-# http://127.0.0.1:8000
-```
+- Strict Pydantic contracts (`extra=forbid`) on mutating inputs
+- Evidence: `schema_version`, dense sequence check, thread lock, shared canonicalization
+- Middleware: security headers, 64 KiB body limit, rate limit
+- Production CORS fail-closed (`CELL_TITAN_ENV=production`)
+- Threat model, ADR 0001, assurance case document
+- Concurrent append test (100 events / 4 threads)
+- CI matrix: Python 3.11 + 3.12
 
 ## Verify
 
 ```bash
 pytest -q
-curl -s localhost:8000/api/health
-curl -s -X POST localhost:8000/api/telemetry/demo?count=4
+./launch.sh
 curl -s localhost:8000/api/evidence/verify
+curl -s localhost:8000/api/status | jq .assurance
 ```
 
-## Tag on GitHub
+## Tag
 
 ```bash
-git tag -a v0.1.0 -m "CELL TITAN public operational release"
-git push origin v0.1.0
-# Then create a Release from the tag in the GitHub UI
+git tag -a v0.1.1 -m "CELL TITAN assurance hardening"
+git push origin v0.1.1
 ```
