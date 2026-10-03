@@ -5,7 +5,7 @@ Assurance posture:
 - Append-only hash-chained evidence with concurrent writers serialized
 - Security headers, body size limit, rate limit on mutations
 - Production fail-closed CORS (no wildcard)
-- Deterministic evidence canonicalization shared by seal + verify
+- Bearer auth on write/ADB routes; ADB off by default; loopback bind default
 """
 from __future__ import annotations
 
@@ -14,13 +14,14 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, Literal
 
-from fastapi import FastAPI, Query, WebSocket, WebSocketDisconnect
+from fastapi import Depends, FastAPI, Query, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from titan import __version__
 from titan.adb_collect import collect_cellular, collect_wifi
+from titan.auth import require_adb_enabled, require_bearer
 from titan.config import settings
 from titan.evidence import EvidenceChain
 from titan.live import hub
@@ -121,6 +122,9 @@ def health() -> dict[str, Any]:
         "listeners": hub.listener_count,
         "auto_demo": settings.auto_demo,
         "env": settings.env,
+        "auth_required": bool(settings.api_token) or settings.require_auth or settings.env == "production",
+        "adb_enabled": settings.adb_enabled,
+        "bind_hint": settings.host,
         "civintelligence": "https://github.com/POWDER-RANGER/CivilianIntelligence",
     }
 
@@ -135,7 +139,7 @@ def list_sensors() -> dict[str, Any]:
     return {"sensors": registry.list()}
 
 
-@app.post("/api/sensors/discover")
+@app.post("/api/sensors/discover", dependencies=[Depends(require_bearer), Depends(require_adb_enabled)])
 async def discover_sensors() -> dict[str, Any]:
     found = registry.discover_adb()
     rec = chain.append("sensor_discover", {"found": len(found), "items": found})
@@ -143,7 +147,7 @@ async def discover_sensors() -> dict[str, Any]:
     return {"found": found, "evidence_seq": rec.seq, "evidence_hash": rec.hash}
 
 
-@app.post("/api/sensors/capture")
+@app.post("/api/sensors/capture", dependencies=[Depends(require_bearer), Depends(require_adb_enabled)])
 async def capture_adb(body: CaptureIn) -> Any:
     sensor = registry.get(body.sensor_id)
     if not sensor or sensor.mode != "adb":
@@ -185,7 +189,7 @@ def list_domains() -> dict[str, Any]:
     }
 
 
-@app.post("/api/telemetry/sample")
+@app.post("/api/telemetry/sample", dependencies=[Depends(require_bearer)])
 async def ingest_sample(body: SampleIn) -> dict[str, Any]:
     sid = body.sensor_id or settings.sensor_id
     sample = RfSample(
@@ -205,7 +209,7 @@ async def ingest_sample(body: SampleIn) -> dict[str, Any]:
     return out
 
 
-@app.post("/api/telemetry/demo")
+@app.post("/api/telemetry/demo", dependencies=[Depends(require_bearer)])
 async def demo_burst(count: int = Query(4, ge=1, le=40)) -> dict[str, Any]:
     out = []
     for i in range(count):
@@ -249,7 +253,7 @@ def status() -> dict[str, Any]:
         "role": "Defensive RF observability pillar of CIVINTELLIGENCE",
         "upstream": "https://github.com/POWDER-RANGER/CivilianIntelligence",
         "release": "public",
-        "assurance": "hash-chain+strict-schema+rate-limit",
+        "assurance": "hash-chain+strict-schema+rate-limit+bearer-auth",
         "health": health(),
         "sensors": registry.list(),
         "domains": list_domains()["domains"],
@@ -257,7 +261,20 @@ def status() -> dict[str, Any]:
 
 
 @app.websocket("/ws/live")
-async def ws_live(ws: WebSocket) -> None:
+async def ws_live(ws: WebSocket, token: str | None = None) -> None:
+    need = bool(settings.api_token) or settings.require_auth or settings.env == "production"
+    if need:
+        client_host = ws.client.host if ws.client else ""
+        loop = client_host in ("127.0.0.1", "::1", "localhost", "testclient")
+        if not (
+            settings.allow_unauthenticated_loopback
+            and loop
+            and not settings.api_token
+            and settings.env != "production"
+        ):
+            if not token or not settings.api_token or token != settings.api_token:
+                await ws.close(code=4401)
+                return
     await ws.accept()
     q = hub.subscribe()
     try:
