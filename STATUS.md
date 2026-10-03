@@ -1,24 +1,16 @@
 # CELL TITAN — status
 
-**Version:** 0.1.1 (assurance hardening)
+**Version:** 0.1.2 (auth boundary)
 **Updated:** 2026-10-03
-**Upstream:** [CivilianIntelligence](https://github.com/POWDER-RANGER/CivilianIntelligence)
 
-## Assurance shipped
+## Shipped
 
-- [x] Strict Pydantic contracts (`extra=forbid`)
-- [x] Canonical hash material shared by seal + verify
-- [x] Concurrent-safe evidence append (lock + fsync)
-- [x] Security headers, body size limit, rate limit
-- [x] Production fail-closed CORS
-- [x] Threat model + ADR + assurance case
-- [x] Concurrent append test (100 events / 4 threads)
-- [x] CI on Python 3.11 and 3.12
+- [x] Bearer token on write + ADB routes
+- [x] ADB disabled by default
+- [x] Default bind 127.0.0.1
+- [x] WS token query param
+- [x] Auth tests
 
-## Run
+## Client policy
 
-```bash
-pytest -q
-./launch.sh
-curl -s localhost:8000/api/evidence/verify
-```
+Localhost / emulator only until TLS (or Tailscale) is in front of Titan for remote devices.
