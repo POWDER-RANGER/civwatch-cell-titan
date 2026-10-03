@@ -1,14 +1,14 @@
-"""API smoke tests using FastAPI TestClient (no live server required)."""
+"""API smoke + contract tests."""
 from pathlib import Path
 
+import os
 import pytest
 from fastapi.testclient import TestClient
 
-import os
-
-os.environ["EVIDENCE_DIR"] = str(Path("/tmp/titan-test-evidence"))
+os.environ["EVIDENCE_DIR"] = str(Path("/tmp/titan-test-evidence-api"))
 os.environ["AUTO_DEMO"] = "false"
 os.environ["SENSOR_ID"] = "test-sensor"
+os.environ["CELL_TITAN_ENV"] = "development"
 
 from main import app  # noqa: E402
 
@@ -26,22 +26,19 @@ def test_health(client):
     assert r.status_code == 200
     body = r.json()
     assert body["service"] == "cell-titan"
-    assert "evidence" in body
     assert body["status"] in ("ok", "degraded")
+    assert "X-Content-Type-Options" in r.headers
 
 
 def test_version(client):
-    r = client.get("/api/version")
-    assert r.status_code == 200
-    assert r.json()["version"]
+    assert client.get("/api/version").json()["version"]
 
 
 def test_demo_and_recent(client):
     r = client.post("/api/telemetry/demo?count=4")
     assert r.status_code == 200
     assert r.json()["emitted"] == 4
-    recent = client.get("/api/telemetry/recent?n=10").json()
-    assert len(recent["samples"]) >= 1
+    assert len(client.get("/api/telemetry/recent?n=10").json()["samples"]) >= 1
 
 
 def test_sample_ingest(client):
@@ -53,6 +50,14 @@ def test_sample_ingest(client):
     assert "evidence_hash" in r.json()
 
 
+def test_sample_rejects_extra(client):
+    r = client.post(
+        "/api/telemetry/sample",
+        json={"domain": "wifi", "metrics": {}, "nope": 1},
+    )
+    assert r.status_code == 422
+
+
 def test_domains_and_sensors(client):
     assert client.get("/api/domains").status_code == 200
     assert client.get("/api/sensors").status_code == 200
@@ -60,13 +65,11 @@ def test_domains_and_sensors(client):
 
 def test_evidence_endpoints(client):
     client.post("/api/telemetry/demo?count=2")
-    v = client.get("/api/evidence/verify").json()
-    assert "ok" in v
-    tail = client.get("/api/evidence/tail?n=5").json()
-    assert "records" in tail
+    assert client.get("/api/evidence/verify").json()["ok"] is True
+    assert "records" in client.get("/api/evidence/tail?n=5").json()
 
 
 def test_status(client):
-    r = client.get("/api/status")
-    assert r.status_code == 200
-    assert r.json()["release"] == "public"
+    body = client.get("/api/status").json()
+    assert body["release"] == "public"
+    assert "assurance" in body
