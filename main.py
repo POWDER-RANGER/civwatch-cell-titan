@@ -1,14 +1,4 @@
-"""CIVWATCH CELL TITAN - hardened public operational release.
-
-Assurance posture:
-- Strict Pydantic contracts (extra=forbid) on mutating inputs
-- Append-only hash-chained evidence with concurrent writers serialized
-- Security headers, body size limit, rate limit on mutations
-- Production fail-closed CORS (no wildcard)
-- Bearer auth on write/ADB routes; ADB off by default; loopback bind default
-- Production refuses to start without TITAN_API_TOKEN
-- WebSocket auth via first JSON message (not query string)
-"""
+"""CIVWATCH CELL TITAN - hardened public operational release."""
 from __future__ import annotations
 
 import asyncio
@@ -27,6 +17,7 @@ from titan.adb_collect import collect_cellular, collect_wifi
 from titan.auth import assert_boot_auth, require_adb_enabled, require_bearer, tokens_equal
 from titan.config import settings
 from titan.evidence import EvidenceChain
+from titan.health_cache import cached_verify
 from titan.live import hub
 from titan.middleware import BodySizeLimitMiddleware, RateLimitMiddleware, SecurityHeadersMiddleware
 from titan.schemas.api import CaptureIn, SampleIn
@@ -92,10 +83,7 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(
     title="CIVWATCH CELL TITAN",
-    description=(
-        "Defensive RF observability for CIVINTELLIGENCE. "
-        "Hash-chained evidence, strict API contracts, demo mode without hardware."
-    ),
+    description="Defensive RF observability for CIVINTELLIGENCE.",
     version=__version__,
     lifespan=lifespan,
     contact={"name": "POWDER-RANGER / CIVWATCH", "url": "https://github.com/POWDER-RANGER/civwatch-cell-titan"},
@@ -107,7 +95,7 @@ app.add_middleware(BodySizeLimitMiddleware, max_body_bytes=settings.max_body_byt
 app.add_middleware(RateLimitMiddleware, limit=settings.rate_limit_per_min, window_sec=60.0)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_list() or (["*"] if settings.env != "production" else []),
+    allow_origins=settings.cors_list(),
     allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],
 )
@@ -115,7 +103,7 @@ app.add_middleware(
 
 @app.get("/api/health")
 def health() -> dict[str, Any]:
-    v = chain.verify()
+    v = cached_verify(chain)
     return {
         "status": "ok" if v["ok"] else "degraded",
         "service": "cell-titan",
@@ -266,7 +254,6 @@ def status() -> dict[str, Any]:
 
 @app.websocket("/ws/live")
 async def ws_live(ws: WebSocket) -> None:
-    """Auth via first JSON message {\"type\":\"auth\",\"token\":\"...\"} - never query string."""
     await ws.accept()
     need = bool(settings.api_token) or settings.require_auth or settings.env == "production"
     if need:
@@ -281,6 +268,9 @@ async def ws_live(ws: WebSocket) -> None:
         if not open_loop:
             try:
                 raw = await asyncio.wait_for(ws.receive_text(), timeout=5.0)
+                if len(raw) > 4096:
+                    await ws.close(code=4401)
+                    return
                 msg = json.loads(raw)
                 tok = str(msg.get("token") or "")
                 if msg.get("type") != "auth" or not tokens_equal(tok, settings.api_token):
