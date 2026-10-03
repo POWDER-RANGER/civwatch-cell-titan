@@ -4,8 +4,8 @@ Design invariants (enforced in tests):
 1. Append-only: never rewrite prior lines.
 2. Hash covers seq, ts, kind, sensor_id, body, prev_hash, schema_version — never the hash field.
 3. Canonical JSON: sort_keys=True, separators=(',', ':'), UTF-8, no NaN.
-4. Concurrent writers serialize via exclusive file lock.
-5. verify() recomputes every link; any mismatch returns broken_at=seq.
+4. Concurrent writers (threads AND processes) serialize via fcntl.flock.
+5. verify() recomputes every link; tip file stores length+last_hash so truncation is detectable.
 """
 from __future__ import annotations
 
@@ -21,16 +21,10 @@ from typing import Any
 SCHEMA_VERSION = 1
 GENESIS_HASH = "0" * 64
 
-_locks: dict[str, threading.Lock] = {}
-_locks_guard = threading.Lock()
-
-
-def _file_lock(path: Path) -> threading.Lock:
-    key = str(path.resolve())
-    with _locks_guard:
-        if key not in _locks:
-            _locks[key] = threading.Lock()
-        return _locks[key]
+try:
+    import fcntl
+except ImportError:
+    fcntl = None  # type: ignore
 
 
 def _utc_now() -> str:
@@ -47,7 +41,6 @@ def canonical_material(
     prev_hash: str,
     schema_version: int = SCHEMA_VERSION,
 ) -> str:
-    """Deterministic serialization used for hashing. Single source of truth for seal + verify."""
     payload = {
         "body": body,
         "kind": kind,
@@ -79,8 +72,35 @@ class EvidenceRecord:
         return asdict(self)
 
 
+class _FileLock:
+    """Process-wide exclusive lock (fcntl) with thread lock for same-process callers."""
+
+    def __init__(self, lock_path: Path) -> None:
+        self._lock_path = lock_path
+        self._thread = threading.Lock()
+        self._fh = None
+
+    def __enter__(self):
+        self._thread.acquire()
+        self._lock_path.parent.mkdir(parents=True, exist_ok=True)
+        self._fh = open(self._lock_path, "a+", encoding="utf-8")
+        if fcntl is not None:
+            fcntl.flock(self._fh.fileno(), fcntl.LOCK_EX)
+        return self
+
+    def __exit__(self, *exc):
+        try:
+            if self._fh is not None and fcntl is not None:
+                fcntl.flock(self._fh.fileno(), fcntl.LOCK_UN)
+        finally:
+            if self._fh is not None:
+                self._fh.close()
+                self._fh = None
+            self._thread.release()
+
+
 class EvidenceChain:
-    """Filesystem-backed append-only chain. One JSONL file per sensor_id."""
+    """Filesystem-backed append-only chain. One JSONL + tip file per sensor_id."""
 
     def __init__(self, root: str | Path, sensor_id: str) -> None:
         if not sensor_id or len(sensor_id) > 128 or "/" in sensor_id or "\\" in sensor_id:
@@ -89,15 +109,32 @@ class EvidenceChain:
         self.root.mkdir(parents=True, exist_ok=True)
         self.sensor_id = sensor_id
         self.path = self.root / f"{sensor_id}.jsonl"
+        self.tip_path = self.root / f"{sensor_id}.tip.json"
+        self.lock_path = self.root / f"{sensor_id}.lock"
         self._last_hash = GENESIS_HASH
         self._seq = 0
-        self._lock = _file_lock(self.path)
-        self._reload_tip()
+        self._file_lock = _FileLock(self.lock_path)
+        with self._file_lock:
+            self._reload_tip_unlocked()
 
-    def _reload_tip(self) -> None:
-        if not self.path.exists():
-            return
-        with self._lock:
+    def _read_tip(self) -> dict[str, Any] | None:
+        if not self.tip_path.exists():
+            return None
+        try:
+            return json.loads(self.tip_path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            return None
+
+    def _write_tip(self, seq: int, last_hash: str) -> None:
+        tip = {"seq": seq, "last_hash": last_hash, "schema_version": SCHEMA_VERSION}
+        tmp = self.tip_path.with_suffix(".tip.tmp")
+        tmp.write_text(json.dumps(tip, separators=(",", ":")), encoding="utf-8")
+        os.replace(tmp, self.tip_path)
+
+    def _reload_tip_unlocked(self) -> None:
+        self._last_hash = GENESIS_HASH
+        self._seq = 0
+        if self.path.exists():
             for line in self.path.read_text(encoding="utf-8").splitlines():
                 if not line.strip():
                     continue
@@ -112,7 +149,8 @@ class EvidenceChain:
             raise TypeError("body must be a dict")
         json.dumps(body, allow_nan=False)
 
-        with self._lock:
+        with self._file_lock:
+            self._reload_tip_unlocked()
             self._seq += 1
             ts = _utc_now()
             material = canonical_material(
@@ -139,47 +177,80 @@ class EvidenceChain:
                 f.flush()
                 os.fsync(f.fileno())
             self._last_hash = h
+            self._write_tip(self._seq, h)
             return rec
 
     def verify(self) -> dict[str, Any]:
-        if not self.path.exists():
-            return {"ok": True, "length": 0, "broken_at": None, "schema_version": SCHEMA_VERSION}
-        prev = GENESIS_HASH
-        n = 0
-        with self._lock:
+        with self._file_lock:
+            if not self.path.exists():
+                tip = self._read_tip()
+                if tip and int(tip.get("seq", 0)) > 0:
+                    return {
+                        "ok": False,
+                        "length": 0,
+                        "broken_at": "truncated",
+                        "schema_version": SCHEMA_VERSION,
+                        "detail": "tip expects records but jsonl missing/empty",
+                    }
+                return {"ok": True, "length": 0, "broken_at": None, "schema_version": SCHEMA_VERSION}
+
+            prev = GENESIS_HASH
+            n = 0
+            last_hash = GENESIS_HASH
             lines = self.path.read_text(encoding="utf-8").splitlines()
-        for line in lines:
-            if not line.strip():
-                continue
-            rec = json.loads(line)
-            n += 1
-            sv = int(rec.get("schema_version", 1))
-            material = canonical_material(
-                seq=int(rec["seq"]),
-                ts=rec["ts"],
-                kind=rec["kind"],
-                sensor_id=rec["sensor_id"],
-                body=rec["body"],
-                prev_hash=rec["prev_hash"],
-                schema_version=sv,
-            )
-            expected = digest(material)
-            if rec["prev_hash"] != prev or rec["hash"] != expected or int(rec["seq"]) != n:
-                return {
-                    "ok": False,
-                    "length": n,
-                    "broken_at": rec.get("seq"),
-                    "schema_version": SCHEMA_VERSION,
-                }
-            prev = rec["hash"]
-        return {"ok": True, "length": n, "broken_at": None, "schema_version": SCHEMA_VERSION}
+            for line in lines:
+                if not line.strip():
+                    continue
+                rec = json.loads(line)
+                n += 1
+                sv = int(rec.get("schema_version", 1))
+                material = canonical_material(
+                    seq=int(rec["seq"]),
+                    ts=rec["ts"],
+                    kind=rec["kind"],
+                    sensor_id=rec["sensor_id"],
+                    body=rec["body"],
+                    prev_hash=rec["prev_hash"],
+                    schema_version=sv,
+                )
+                expected = digest(material)
+                if rec["prev_hash"] != prev or rec["hash"] != expected or int(rec["seq"]) != n:
+                    return {
+                        "ok": False,
+                        "length": n,
+                        "broken_at": rec.get("seq"),
+                        "schema_version": SCHEMA_VERSION,
+                    }
+                prev = rec["hash"]
+                last_hash = rec["hash"]
+
+            tip = self._read_tip()
+            if tip is not None:
+                if int(tip.get("seq", -1)) != n or tip.get("last_hash") != last_hash:
+                    return {
+                        "ok": False,
+                        "length": n,
+                        "broken_at": "truncated",
+                        "schema_version": SCHEMA_VERSION,
+                        "detail": "jsonl tip mismatch (possible truncation or rewrite)",
+                        "tip_seq": tip.get("seq"),
+                        "jsonl_seq": n,
+                    }
+            return {"ok": True, "length": n, "broken_at": None, "schema_version": SCHEMA_VERSION}
+
+    def tip_snapshot(self) -> dict[str, Any]:
+        with self._file_lock:
+            tip = self._read_tip()
+            if tip:
+                return {"seq": tip.get("seq", 0), "last_hash": tip.get("last_hash", GENESIS_HASH)}
+            return {"seq": self._seq, "last_hash": self._last_hash}
 
     def tail(self, n: int = 20) -> list[dict[str, Any]]:
         if n < 1:
             return []
-        if not self.path.exists():
-            return []
-        with self._lock:
+        with self._file_lock:
+            if not self.path.exists():
+                return []
             lines = [ln for ln in self.path.read_text(encoding="utf-8").splitlines() if ln.strip()]
         return [json.loads(ln) for ln in lines[-n:]]
 

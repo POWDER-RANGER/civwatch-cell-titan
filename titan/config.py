@@ -23,14 +23,17 @@ class Settings:
     database_url: str = os.environ.get("DATABASE_URL", "sqlite:///./data/civwatch_titan.db")
     evidence_dir: str = os.environ.get("EVIDENCE_DIR", "./data/evidence")
     operator_contact: str = os.environ.get("OPERATOR_CONTACT", "")
-    cors_origins: str = os.environ.get("CORS_ORIGINS", "*")
+    cors_origins: str = os.environ.get(
+        "CORS_ORIGINS",
+        "http://127.0.0.1:8000,http://localhost:8000",
+    )
     auto_demo: bool = _bool("AUTO_DEMO", "false")
     demo_interval_sec: float = float(os.environ.get("DEMO_INTERVAL_SEC", "15"))
     rate_limit_per_min: int = int(os.environ.get("RATE_LIMIT_PER_MIN", "120"))
     max_body_bytes: int = int(os.environ.get("MAX_BODY_BYTES", "65536"))
     api_token: str = os.environ.get("TITAN_API_TOKEN", "")
     require_auth: bool = _bool("REQUIRE_AUTH", "false")
-    allow_unauthenticated_loopback: bool = _bool("ALLOW_UNAUTHENTICATED_LOOPBACK", "true")
+    allow_unauthenticated_loopback: bool = _bool("ALLOW_UNAUTHENTICATED_LOOPBACK", "false")
     adb_enabled: bool = _bool("ADB_ENABLED", "false")
     civint_base: str = os.environ.get(
         "CIVINT_BASE",
@@ -38,9 +41,15 @@ class Settings:
     )
 
     def cors_list(self) -> list[str]:
-        if self.env == "production" and self.cors_origins.strip() == "*":
+        out = []
+        for o in self.cors_origins.split(","):
+            o = o.strip()
+            if not o or o == "*":
+                continue
+            out.append(o)
+        if self.env == "production" and not out:
             return []
-        return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
+        return out
 
 
 settings = Settings()
