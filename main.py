@@ -1,4 +1,4 @@
-"""CIVWATCH CELL TITAN — hardened public operational release.
+"""CIVWATCH CELL TITAN - hardened public operational release.
 
 Assurance posture:
 - Strict Pydantic contracts (extra=forbid) on mutating inputs
@@ -6,10 +6,13 @@ Assurance posture:
 - Security headers, body size limit, rate limit on mutations
 - Production fail-closed CORS (no wildcard)
 - Bearer auth on write/ADB routes; ADB off by default; loopback bind default
+- Production refuses to start without TITAN_API_TOKEN
+- WebSocket auth via first JSON message (not query string)
 """
 from __future__ import annotations
 
 import asyncio
+import json
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, Literal
@@ -21,7 +24,7 @@ from fastapi.staticfiles import StaticFiles
 
 from titan import __version__
 from titan.adb_collect import collect_cellular, collect_wifi
-from titan.auth import require_adb_enabled, require_bearer
+from titan.auth import assert_boot_auth, require_adb_enabled, require_bearer, tokens_equal
 from titan.config import settings
 from titan.evidence import EvidenceChain
 from titan.live import hub
@@ -62,6 +65,7 @@ async def _demo_loop(interval: float) -> None:
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     global _demo_task
+    assert_boot_auth()
     Path(settings.evidence_dir).mkdir(parents=True, exist_ok=True)
     Path("./data").mkdir(parents=True, exist_ok=True)
     chain.append(
@@ -261,21 +265,30 @@ def status() -> dict[str, Any]:
 
 
 @app.websocket("/ws/live")
-async def ws_live(ws: WebSocket, token: str | None = None) -> None:
+async def ws_live(ws: WebSocket) -> None:
+    """Auth via first JSON message {\"type\":\"auth\",\"token\":\"...\"} - never query string."""
+    await ws.accept()
     need = bool(settings.api_token) or settings.require_auth or settings.env == "production"
     if need:
         client_host = ws.client.host if ws.client else ""
         loop = client_host in ("127.0.0.1", "::1", "localhost", "testclient")
-        if not (
+        open_loop = (
             settings.allow_unauthenticated_loopback
             and loop
             and not settings.api_token
             and settings.env != "production"
-        ):
-            if not token or not settings.api_token or token != settings.api_token:
+        )
+        if not open_loop:
+            try:
+                raw = await asyncio.wait_for(ws.receive_text(), timeout=5.0)
+                msg = json.loads(raw)
+                tok = str(msg.get("token") or "")
+                if msg.get("type") != "auth" or not tokens_equal(tok, settings.api_token):
+                    await ws.close(code=4401)
+                    return
+            except Exception:
                 await ws.close(code=4401)
                 return
-    await ws.accept()
     q = hub.subscribe()
     try:
         await ws.send_json({"type": "hello", "version": __version__, "sensor_id": settings.sensor_id})
