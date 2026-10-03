@@ -18,7 +18,15 @@ Report vulnerabilities privately via GitHub Security Advisories on this reposito
 
 - Default `HOST=127.0.0.1` (loopback only).
 - Set `TITAN_API_TOKEN` and send `Authorization: Bearer <token>` on all **write** and **ADB** routes.
-- `ADB_ENABLED` defaults to `false`. Device capture is unavailable until explicitly enabled.
-- Do **not** bind `0.0.0.0` without a token **and** TLS (or a VPN such as Tailscale/WireGuard).
-- WebSocket `/ws/live` accepts `?token=` when a token is configured.
-- Supported client posture until TLS is in front: **localhost / emulator only**. Physical-phone LAN access is unsupported without auth + encrypted transport.
+- `ADB_ENABLED` defaults to `false`.
+- Production (`CELL_TITAN_ENV=production`) or `REQUIRE_AUTH=true` **refuses to start** without `TITAN_API_TOKEN`.
+- Token comparison uses `hmac.compare_digest` with a length-mismatch guard.
+- WebSocket `/ws/live` authenticates with a first-frame JSON message
+  (`{"type":"auth","token":"..."}`), **not** a query string (avoids proxy/history leakage).
+- Do **not** bind `0.0.0.0` without a token **and** TLS (or Tailscale/WireGuard).
+- Supported client posture until TLS is in front: **localhost / emulator only**.
+
+## Read routes
+
+GET health, status, recent telemetry, and evidence remain open for local operator dashboards.
+If remote access is ever enabled, plan to require auth on reads as well.
