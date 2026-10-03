@@ -1,0 +1,26 @@
+[project]
+name = "civwatch-cell-titan"
+version = "0.1.0"
+description = "CIVWATCH CELL TITAN — defensive RF observability for CIVINTELLIGENCE"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "POWDER-RANGER" }]
+dependencies = [
+  "fastapi>=0.115",
+  "uvicorn[standard]>=0.32",
+  "pydantic>=2.0",
+  "python-dotenv>=1.0",
+]
+
+[project.optional-dependencies]
+adb = ["adbutils>=2.0"]
+dev = ["pytest>=8", "httpx>=0.27"]
+
+[project.urls]
+Homepage = "https://github.com/POWDER-RANGER/civwatch-cell-titan"
+Upstream = "https://github.com/POWDER-RANGER/CivilianIntelligence"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

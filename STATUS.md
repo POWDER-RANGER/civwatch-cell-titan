@@ -1,30 +1,24 @@
-# CELL TITAN — operational status
+# CELL TITAN — status
 
-**Version:** 0.1.0
+**Version:** 0.1.0 (public operational release)
 **Updated:** 2026-10-03
 **Upstream:** [CivilianIntelligence](https://github.com/POWDER-RANGER/CivilianIntelligence)
 
-## Baseline (this release)
+## Shipped
 
-- [x] FastAPI service with `/api/health`
-- [x] Hash-chained evidence log (`titan/evidence.py`)
-- [x] Sensor registry + optional ADB discovery
-- [x] Four RF domains with demo telemetry
-- [x] Operator dashboard (`static/index.html`)
-- [x] Pytest coverage for chain + buffer
-- [x] README aligned with CIVINTELLIGENCE
+- [x] FastAPI public API + OpenAPI docs
+- [x] Hash-chained evidence log with verify
+- [x] Demo telemetry (4 domains)
+- [x] Optional ADB discover + capture
+- [x] WebSocket `/ws/live`
+- [x] Operator dashboard
+- [x] Pytest + GitHub Actions CI
+- [x] SECURITY / CONTRIBUTING / CHANGELOG
+- [x] `pyproject.toml` package metadata
 
-## Next
+## Next (post-0.1)
 
-- [ ] Live cellular/Wi-Fi dumps via ADB shell (device-bound)
-- [ ] Postgres/SQLite event store (replace pure JSONL for query)
-- [ ] WebSocket live feed for the dashboard
-- [ ] Publish evidence digests into CIVINTELLIGENCE Veil (optional)
-
-## Runbook
-
-```bash
-./launch.sh
-pytest -q
-curl -s localhost:8000/api/status | jq .
-```
+- [ ] Authenticated multi-sensor federation
+- [ ] SQLite/Postgres event query index on top of JSONL
+- [ ] Structured cellular parsers per major OEM
+- [ ] Optional publish of evidence digests to CIVINTELLIGENCE Veil
