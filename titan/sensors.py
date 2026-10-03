@@ -57,17 +57,20 @@ class SensorRegistry:
             import adbutils
         except ImportError:
             return []
-        found = []
+        found: list[dict[str, Any]] = []
         try:
+            from titan.adb_collect import collect_device_props
+
             for d in adbutils.adb.device_list():
                 sid = f"adb-{d.serial}"
+                props = collect_device_props(d.serial)
                 sensor = Sensor(
                     id=sid,
-                    label=f"ADB {d.serial}",
+                    label=f"ADB {props.get('model') or d.serial}",
                     mode="adb",
                     last_seen=_utc(),
                     domains=["cellular", "wifi"],
-                    meta={"serial": d.serial},
+                    meta={"serial": d.serial, **{k: v for k, v in props.items() if k != "serial"}},
                 )
                 self.register(sensor)
                 found.append(sensor.to_dict())
