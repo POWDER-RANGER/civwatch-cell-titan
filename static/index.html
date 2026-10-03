@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>CELL TITAN — CIVWATCH</title>
+  <style>
+    :root { color-scheme: dark; --bg:#0d1117; --card:#161b22; --line:#30363d; --cyan:#00e5ff; --muted:#8b949e; --ok:#3fb950; }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: ui-sans-serif, system-ui, sans-serif; background: var(--bg); color: #e6edf3; }
+    header { padding: 1.25rem 1.5rem; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; }
+    h1 { margin: 0; font-size: 1.25rem; letter-spacing: 0.04em; color: var(--cyan); }
+    main { padding: 1.5rem; max-width: 960px; margin: 0 auto; display: grid; gap: 1rem; }
+    .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 1rem 1.25rem; }
+    .row { display: flex; gap: 0.75rem; flex-wrap: wrap; }
+    button { background: var(--cyan); color: #001018; border: 0; border-radius: 8px; padding: 0.5rem 0.9rem; font-weight: 600; cursor: pointer; }
+    button:hover { filter: brightness(1.1); }
+    pre { background: #0d1117; border: 1px solid var(--line); border-radius: 8px; padding: 0.75rem; overflow: auto; font-size: 12px; max-height: 280px; }
+    .pill { font-size: 11px; padding: 0.2rem 0.5rem; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
+    .pill.ok { color: var(--ok); border-color: var(--ok); }
+    a { color: var(--cyan); }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>CELL TITAN</h1>
+      <p style="margin:0.25rem 0 0;color:var(--muted);font-size:13px">Defensive RF observability · CIVINTELLIGENCE pillar</p>
+    </div>
+    <span id="health" class="pill">checking…</span>
+  </header>
+  <main>
+    <div class="card">
+      <div class="row">
+        <button id="btn-demo">Emit demo samples</button>
+        <button id="btn-verify" style="background:#238636;color:#fff">Verify evidence chain</button>
+        <a href="/docs">OpenAPI docs</a>
+      </div>
+      <p style="color:var(--muted);font-size:13px;margin:0.75rem 0 0">
+        Demo mode needs no Android device. Samples are labeled <code>demo: true</code> and sealed into a local hash chain.
+      </p>
+    </div>
+    <div class="card">
+      <h2 style="margin:0 0 0.5rem;font-size:1rem">Recent telemetry</h2>
+      <pre id="telemetry">[]</pre>
+    </div>
+    <div class="card">
+      <h2 style="margin:0 0 0.5rem;font-size:1rem">Evidence tail</h2>
+      <pre id="evidence">[]</pre>
+    </div>
+  </main>
+  <script>
+    async function j(url, opts) {
+      const r = await fetch(url, opts);
+      return r.json();
+    }
+    async function refresh() {
+      const h = await j('/api/health');
+      const el = document.getElementById('health');
+      el.textContent = h.status + ' · evidence ' + (h.evidence?.ok ? 'intact' : 'BROKEN');
+      el.className = 'pill' + (h.status === 'ok' ? ' ok' : '');
+      document.getElementById('telemetry').textContent = JSON.stringify((await j('/api/telemetry/recent?n=12')).samples, null, 2);
+      document.getElementById('evidence').textContent = JSON.stringify((await j('/api/evidence/tail?n=8')).records, null, 2);
+    }
+    document.getElementById('btn-demo').onclick = async () => { await j('/api/telemetry/demo?count=4', { method: 'POST' }); refresh(); };
+    document.getElementById('btn-verify').onclick = async () => { alert(JSON.stringify(await j('/api/evidence/verify'), null, 2)); refresh(); };
+    refresh();
+    setInterval(refresh, 8000);
+  </script>
+</body>
+</html>
