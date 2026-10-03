@@ -1,58 +1,101 @@
-"""CIVWATCH CELL TITAN — FastAPI entrypoint.
+"""CIVWATCH CELL TITAN — public operational release entrypoint.
 
-Defensive RF observability baseline. Demo mode works with zero hardware.
+Defensive RF observability. Demo mode needs no hardware.
 ADB sensors are optional. Evidence is hash-chained and append-only.
 """
 from __future__ import annotations
 
+import asyncio
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, Literal
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, Query, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+from titan import __version__
+from titan.adb_collect import collect_cellular, collect_wifi
 from titan.config import settings
 from titan.evidence import EvidenceChain
+from titan.live import hub
 from titan.sensors import SensorRegistry
-from titan.telemetry import Domain, SampleBuffer, synthetic_sample
+from titan.telemetry import Domain, RfSample, SampleBuffer, synthetic_sample, _utc
 
 DOMAINS: tuple[Domain, ...] = ("cellular", "wifi", "d2d", "transport")
 
 registry = SensorRegistry(settings.sensor_id)
-buffer = SampleBuffer(capacity=1000)
+buffer = SampleBuffer(capacity=2000)
 chain = EvidenceChain(settings.evidence_dir, settings.sensor_id)
+_demo_task: asyncio.Task | None = None
+
+
+async def _demo_loop(interval: float) -> None:
+    while True:
+        for domain in DOMAINS:
+            sample = synthetic_sample(domain, settings.sensor_id)
+            buffer.push(sample)
+            rec = chain.append(
+                "telemetry_demo",
+                {"domain": sample.domain, "sensor_id": sample.sensor_id, "metrics": sample.metrics},
+            )
+            await hub.publish(
+                {
+                    "type": "telemetry",
+                    "sample": sample.to_dict(),
+                    "evidence_seq": rec.seq,
+                    "evidence_hash": rec.hash,
+                }
+            )
+        registry.touch(settings.sensor_id)
+        await asyncio.sleep(interval)
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    global _demo_task
     Path(settings.evidence_dir).mkdir(parents=True, exist_ok=True)
     Path("./data").mkdir(parents=True, exist_ok=True)
     chain.append(
         "boot",
         {
-            "version": "0.1.0",
+            "version": __version__,
             "sensor_id": settings.sensor_id,
             "mode": "demo",
             "platform": "cell-titan",
+            "auto_demo": settings.auto_demo,
         },
     )
+    if settings.auto_demo:
+        _demo_task = asyncio.create_task(_demo_loop(settings.demo_interval_sec))
     yield
+    if _demo_task:
+        _demo_task.cancel()
+        try:
+            await _demo_task
+        except asyncio.CancelledError:
+            pass
 
 
 app = FastAPI(
     title="CIVWATCH CELL TITAN",
-    description="Defensive RF observability — federated sensors, hash-chained evidence.",
-    version="0.1.0",
+    description=(
+        "Defensive RF observability for CIVINTELLIGENCE. "
+        "Federated sensors, hash-chained evidence, demo mode without hardware."
+    ),
+    version=__version__,
     lifespan=lifespan,
+    contact={"name": "POWDER-RANGER / CIVWATCH", "url": "https://github.com/POWDER-RANGER/civwatch-cell-titan"},
+    license_info={"name": "MIT"},
 )
+
+_origins = [o.strip() for o in settings.cors_origins.split(",") if o.strip()]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
+    allow_origins=_origins or ["*"],
+    allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],
 )
 
@@ -63,18 +106,30 @@ class SampleIn(BaseModel):
     sensor_id: str | None = None
 
 
+class CaptureIn(BaseModel):
+    sensor_id: str
+    domains: list[Literal["cellular", "wifi"]] = Field(default_factory=lambda: ["cellular", "wifi"])
+
+
 @app.get("/api/health")
 def health() -> dict[str, Any]:
     v = chain.verify()
     return {
         "status": "ok" if v["ok"] else "degraded",
         "service": "cell-titan",
-        "version": "0.1.0",
+        "version": __version__,
         "sensor_id": settings.sensor_id,
         "evidence": v,
         "buffer": buffer.stats(),
+        "listeners": hub.listener_count,
+        "auto_demo": settings.auto_demo,
         "civintelligence": "https://github.com/POWDER-RANGER/CivilianIntelligence",
     }
+
+
+@app.get("/api/version")
+def version() -> dict[str, str]:
+    return {"version": __version__, "service": "cell-titan"}
 
 
 @app.get("/api/sensors")
@@ -83,18 +138,44 @@ def list_sensors() -> dict[str, Any]:
 
 
 @app.post("/api/sensors/discover")
-def discover_sensors() -> dict[str, Any]:
+async def discover_sensors() -> dict[str, Any]:
     found = registry.discover_adb()
-    chain.append("sensor_discover", {"found": len(found), "items": found})
-    return {"found": found}
+    rec = chain.append("sensor_discover", {"found": len(found), "items": found})
+    await hub.publish({"type": "sensors", "found": found, "evidence_seq": rec.seq})
+    return {"found": found, "evidence_seq": rec.seq}
+
+
+@app.post("/api/sensors/capture")
+async def capture_adb(body: CaptureIn) -> Any:
+    sensor = registry.get(body.sensor_id)
+    if not sensor or sensor.mode != "adb":
+        return JSONResponse(
+            status_code=404,
+            content={"error": "adb_sensor_not_found", "hint": "POST /api/sensors/discover first"},
+        )
+    serial = str(sensor.meta.get("serial") or body.sensor_id.replace("adb-", "", 1))
+    emitted = []
+    for domain in body.domains:
+        metrics = collect_cellular(serial) if domain == "cellular" else collect_wifi(serial)
+        sample = RfSample(domain=domain, sensor_id=body.sensor_id, ts=_utc(), metrics=metrics)
+        buffer.push(sample)
+        rec = chain.append(
+            "telemetry_adb",
+            {"domain": domain, "sensor_id": body.sensor_id, "metrics": metrics},
+        )
+        event = {"type": "telemetry", "sample": sample.to_dict(), "evidence_seq": rec.seq, "evidence_hash": rec.hash}
+        await hub.publish(event)
+        emitted.append(event)
+    registry.touch(body.sensor_id)
+    return {"emitted": len(emitted), "items": emitted}
 
 
 @app.get("/api/domains")
 def list_domains() -> dict[str, Any]:
     return {
         "domains": [
-            {"id": "cellular", "protocols": ["LTE", "5G NR", "GSM"], "status": "demo"},
-            {"id": "wifi", "protocols": ["802.11"], "status": "demo"},
+            {"id": "cellular", "protocols": ["LTE", "5G NR", "GSM"], "status": "demo+adb"},
+            {"id": "wifi", "protocols": ["802.11"], "status": "demo+adb"},
             {"id": "d2d", "protocols": ["LTE-D2D", "NR Sidelink"], "status": "demo"},
             {"id": "transport", "protocols": ["Bluetooth", "BLE", "NFC"], "status": "demo"},
         ]
@@ -102,15 +183,13 @@ def list_domains() -> dict[str, Any]:
 
 
 @app.post("/api/telemetry/sample")
-def ingest_sample(body: SampleIn) -> dict[str, Any]:
+async def ingest_sample(body: SampleIn) -> dict[str, Any]:
     sid = body.sensor_id or settings.sensor_id
-    from titan.telemetry import RfSample, _utc
-
     sample = RfSample(
         domain=body.domain,
         sensor_id=sid,
         ts=_utc(),
-        metrics={**body.metrics, "demo": body.metrics.get("demo", False)},
+        metrics={**body.metrics, "demo": bool(body.metrics.get("demo", False))},
     )
     buffer.push(sample)
     registry.touch(sid)
@@ -118,11 +197,13 @@ def ingest_sample(body: SampleIn) -> dict[str, Any]:
         "telemetry",
         {"domain": sample.domain, "sensor_id": sid, "metrics": sample.metrics},
     )
-    return {"sample": sample.to_dict(), "evidence_seq": rec.seq, "evidence_hash": rec.hash}
+    out = {"sample": sample.to_dict(), "evidence_seq": rec.seq, "evidence_hash": rec.hash}
+    await hub.publish({"type": "telemetry", **out})
+    return out
 
 
 @app.post("/api/telemetry/demo")
-def demo_burst(count: int = Query(4, ge=1, le=40)) -> dict[str, Any]:
+async def demo_burst(count: int = Query(4, ge=1, le=40)) -> dict[str, Any]:
     out = []
     for i in range(count):
         domain = DOMAINS[i % len(DOMAINS)]
@@ -132,7 +213,9 @@ def demo_burst(count: int = Query(4, ge=1, le=40)) -> dict[str, Any]:
             "telemetry_demo",
             {"domain": sample.domain, "sensor_id": sample.sensor_id, "metrics": sample.metrics},
         )
-        out.append({"sample": sample.to_dict(), "evidence_seq": rec.seq})
+        item = {"sample": sample.to_dict(), "evidence_seq": rec.seq, "evidence_hash": rec.hash}
+        await hub.publish({"type": "telemetry", **item})
+        out.append(item)
     registry.touch(settings.sensor_id)
     return {"emitted": len(out), "items": out}
 
@@ -159,17 +242,37 @@ def evidence_tail(n: int = Query(20, ge=1, le=200)) -> dict[str, Any]:
 def status() -> dict[str, Any]:
     return {
         "platform": "CIVWATCH CELL TITAN",
+        "version": __version__,
         "role": "Defensive RF observability pillar of CIVINTELLIGENCE",
         "upstream": "https://github.com/POWDER-RANGER/CivilianIntelligence",
+        "release": "public",
         "health": health(),
         "sensors": registry.list(),
         "domains": list_domains()["domains"],
     }
 
 
+@app.websocket("/ws/live")
+async def ws_live(ws: WebSocket) -> None:
+    await ws.accept()
+    q = hub.subscribe()
+    try:
+        await ws.send_json({"type": "hello", "version": __version__, "sensor_id": settings.sensor_id})
+        while True:
+            try:
+                msg = await asyncio.wait_for(q.get(), timeout=25.0)
+                await ws.send_text(msg)
+            except asyncio.TimeoutError:
+                await ws.send_json({"type": "ping"})
+    except WebSocketDisconnect:
+        pass
+    finally:
+        hub.unsubscribe(q)
+
+
 STATIC = Path(__file__).parent / "static"
 if STATIC.is_dir():
-    app.mount("/static", StaticFiles(directory=str(STATIC)), name="static")
+    app.mount("/assets", StaticFiles(directory=str(STATIC)), name="assets")
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -177,9 +280,7 @@ def index() -> Any:
     index_path = STATIC / "index.html"
     if index_path.exists():
         return FileResponse(index_path)
-    return HTMLResponse(
-        "<h1>CELL TITAN</h1><p>API up. See <a href='/docs'>/docs</a> and <a href='/api/health'>/api/health</a>.</p>"
-    )
+    return HTMLResponse("<h1>CELL TITAN</h1><p>API up. See <a href='/docs'>/docs</a>.</p>")
 
 
 if __name__ == "__main__":
