@@ -1,7 +1,11 @@
-"""CIVWATCH CELL TITAN — public operational release entrypoint.
+"""CIVWATCH CELL TITAN — hardened public operational release.
 
-Defensive RF observability. Demo mode needs no hardware.
-ADB sensors are optional. Evidence is hash-chained and append-only.
+Assurance posture:
+- Strict Pydantic contracts (extra=forbid) on mutating inputs
+- Append-only hash-chained evidence with concurrent writers serialized
+- Security headers, body size limit, rate limit on mutations
+- Production fail-closed CORS (no wildcard)
+- Deterministic evidence canonicalization shared by seal + verify
 """
 from __future__ import annotations
 
@@ -14,13 +18,14 @@ from fastapi import FastAPI, Query, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field
 
 from titan import __version__
 from titan.adb_collect import collect_cellular, collect_wifi
 from titan.config import settings
 from titan.evidence import EvidenceChain
 from titan.live import hub
+from titan.middleware import BodySizeLimitMiddleware, RateLimitMiddleware, SecurityHeadersMiddleware
+from titan.schemas.api import CaptureIn, SampleIn
 from titan.sensors import SensorRegistry
 from titan.telemetry import Domain, RfSample, SampleBuffer, synthetic_sample, _utc
 
@@ -66,6 +71,7 @@ async def lifespan(_app: FastAPI):
             "mode": "demo",
             "platform": "cell-titan",
             "auto_demo": settings.auto_demo,
+            "env": settings.env,
         },
     )
     if settings.auto_demo:
@@ -83,7 +89,7 @@ app = FastAPI(
     title="CIVWATCH CELL TITAN",
     description=(
         "Defensive RF observability for CIVINTELLIGENCE. "
-        "Federated sensors, hash-chained evidence, demo mode without hardware."
+        "Hash-chained evidence, strict API contracts, demo mode without hardware."
     ),
     version=__version__,
     lifespan=lifespan,
@@ -91,24 +97,15 @@ app = FastAPI(
     license_info={"name": "MIT"},
 )
 
-_origins = [o.strip() for o in settings.cors_origins.split(",") if o.strip()]
+app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(BodySizeLimitMiddleware, max_body_bytes=settings.max_body_bytes)
+app.add_middleware(RateLimitMiddleware, limit=settings.rate_limit_per_min, window_sec=60.0)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=_origins or ["*"],
+    allow_origins=settings.cors_list() or (["*"] if settings.env != "production" else []),
     allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],
 )
-
-
-class SampleIn(BaseModel):
-    domain: Literal["cellular", "wifi", "d2d", "transport"]
-    metrics: dict[str, Any] = Field(default_factory=dict)
-    sensor_id: str | None = None
-
-
-class CaptureIn(BaseModel):
-    sensor_id: str
-    domains: list[Literal["cellular", "wifi"]] = Field(default_factory=lambda: ["cellular", "wifi"])
 
 
 @app.get("/api/health")
@@ -123,6 +120,7 @@ def health() -> dict[str, Any]:
         "buffer": buffer.stats(),
         "listeners": hub.listener_count,
         "auto_demo": settings.auto_demo,
+        "env": settings.env,
         "civintelligence": "https://github.com/POWDER-RANGER/CivilianIntelligence",
     }
 
@@ -142,7 +140,7 @@ async def discover_sensors() -> dict[str, Any]:
     found = registry.discover_adb()
     rec = chain.append("sensor_discover", {"found": len(found), "items": found})
     await hub.publish({"type": "sensors", "found": found, "evidence_seq": rec.seq})
-    return {"found": found, "evidence_seq": rec.seq}
+    return {"found": found, "evidence_seq": rec.seq, "evidence_hash": rec.hash}
 
 
 @app.post("/api/sensors/capture")
@@ -163,7 +161,12 @@ async def capture_adb(body: CaptureIn) -> Any:
             "telemetry_adb",
             {"domain": domain, "sensor_id": body.sensor_id, "metrics": metrics},
         )
-        event = {"type": "telemetry", "sample": sample.to_dict(), "evidence_seq": rec.seq, "evidence_hash": rec.hash}
+        event = {
+            "type": "telemetry",
+            "sample": sample.to_dict(),
+            "evidence_seq": rec.seq,
+            "evidence_hash": rec.hash,
+        }
         await hub.publish(event)
         emitted.append(event)
     registry.touch(body.sensor_id)
@@ -246,6 +249,7 @@ def status() -> dict[str, Any]:
         "role": "Defensive RF observability pillar of CIVINTELLIGENCE",
         "upstream": "https://github.com/POWDER-RANGER/CivilianIntelligence",
         "release": "public",
+        "assurance": "hash-chain+strict-schema+rate-limit",
         "health": health(),
         "sensors": registry.list(),
         "domains": list_domains()["domains"],
