@@ -1,36 +1,44 @@
 """Bearer-token gate for mutating and privileged routes.
 
-Design:
-- If TITAN_API_TOKEN is unset/empty: write routes work on loopback only when
-  ALLOW_UNAUTHENTICATED_LOOPBACK is true (default in development).
-- Non-loopback clients always need a matching Bearer token when a token is configured.
-- When REQUIRE_AUTH=true (or production env), token is mandatory for protected routes
-  even on loopback.
-- ADB routes additionally require ADB_ENABLED=true.
+Production / REQUIRE_AUTH: TITAN_API_TOKEN is mandatory (process refuses to start
+without it — see main lifespan). Development without a token: loopback-only
+writes when ALLOW_UNAUTHENTICATED_LOOPBACK is true.
 """
 from __future__ import annotations
 
 import hmac
 import secrets
-from typing import Annotated
+from typing import TYPE_CHECKING, Annotated, Optional
 
-from fastapi import Header, HTTPException, Request
+if TYPE_CHECKING:
+    from fastapi import Request
+
+try:
+    from fastapi import Header, HTTPException, Request
+except ImportError:  # unit tests that only need tokens_equal / assert_boot_auth
+    Header = object  # type: ignore
+    HTTPException = Exception  # type: ignore
+    Request = object  # type: ignore
 
 
 def is_loopback(request: Request) -> bool:
-    host = (request.client.host if request.client else "") or ""
+    host = (request.client.host if getattr(request, "client", None) else "") or ""
     return host in ("127.0.0.1", "::1", "localhost", "testclient")
 
 
-def token_configured() -> bool:
-    from titan.config import settings
-
-    return bool(settings.api_token)
+def tokens_equal(presented: str, expected: str) -> bool:
+    """Constant-time compare; different lengths always fail without raising."""
+    if not presented or not expected:
+        return False
+    if len(presented) != len(expected):
+        hmac.compare_digest(presented, presented)
+        return False
+    return hmac.compare_digest(presented, expected)
 
 
 def require_bearer(
     request: Request,
-    authorization: Annotated[str | None, Header()] = None,
+    authorization: Annotated[Optional[str], Header()] = None,
 ) -> None:
     from titan.config import settings
 
@@ -53,7 +61,7 @@ def require_bearer(
     if not authorization or not authorization.lower().startswith("bearer "):
         raise HTTPException(status_code=401, detail="missing_bearer_token")
     presented = authorization.split(" ", 1)[1].strip()
-    if not presented or not hmac.compare_digest(presented, token):
+    if not tokens_equal(presented, token):
         raise HTTPException(status_code=401, detail="invalid_token")
 
 
@@ -69,3 +77,14 @@ def require_adb_enabled() -> None:
 
 def generate_token() -> str:
     return secrets.token_urlsafe(32)
+
+
+def assert_boot_auth() -> None:
+    """Call at process start. Production without a token must not serve traffic."""
+    from titan.config import settings
+
+    if (settings.require_auth or settings.env == "production") and not settings.api_token:
+        raise RuntimeError(
+            "CELL TITAN refuse-to-start: CELL_TITAN_ENV=production or REQUIRE_AUTH=true "
+            "requires TITAN_API_TOKEN to be set"
+        )
