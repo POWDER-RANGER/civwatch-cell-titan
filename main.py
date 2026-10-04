@@ -14,7 +14,7 @@ from fastapi.staticfiles import StaticFiles
 
 from titan import __version__
 from titan.adb_collect import collect_cellular, collect_wifi
-from titan.auth import assert_boot_auth, require_adb_enabled, require_bearer, tokens_equal
+from titan.auth import assert_boot_auth, require_adb_enabled, require_bearer, require_local_or_bearer, tokens_equal
 from titan.config import settings
 from titan.evidence import EvidenceChain
 from titan.health_cache import cached_verify
@@ -126,7 +126,7 @@ def version() -> dict[str, str]:
     return {"version": __version__, "service": "cell-titan"}
 
 
-@app.get("/api/sensors")
+@app.get("/api/sensors", dependencies=[Depends(require_local_or_bearer)])
 def list_sensors() -> dict[str, Any]:
     return {"sensors": registry.list()}
 
@@ -169,7 +169,7 @@ async def capture_adb(body: CaptureIn) -> Any:
     return {"emitted": len(emitted), "items": emitted}
 
 
-@app.get("/api/domains")
+@app.get("/api/domains", dependencies=[Depends(require_local_or_bearer)])
 def list_domains() -> dict[str, Any]:
     return {
         "domains": [
@@ -219,7 +219,7 @@ async def demo_burst(count: int = Query(4, ge=1, le=40)) -> dict[str, Any]:
     return {"emitted": len(out), "items": out}
 
 
-@app.get("/api/telemetry/recent")
+@app.get("/api/telemetry/recent", dependencies=[Depends(require_local_or_bearer)])
 def recent_telemetry(
     n: int = Query(50, ge=1, le=500),
     domain: Domain | None = None,
@@ -227,17 +227,17 @@ def recent_telemetry(
     return {"samples": buffer.recent(n, domain)}
 
 
-@app.get("/api/evidence/verify")
+@app.get("/api/evidence/verify", dependencies=[Depends(require_local_or_bearer)])
 def evidence_verify() -> dict[str, Any]:
     return chain.verify()
 
 
-@app.get("/api/evidence/tail")
+@app.get("/api/evidence/tail", dependencies=[Depends(require_local_or_bearer)])
 def evidence_tail(n: int = Query(20, ge=1, le=200)) -> dict[str, Any]:
     return {"records": chain.tail(n)}
 
 
-@app.get("/api/status")
+@app.get("/api/status", dependencies=[Depends(require_local_or_bearer)])
 def status() -> dict[str, Any]:
     return {
         "platform": "CIVWATCH CELL TITAN",
