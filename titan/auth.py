@@ -39,6 +39,23 @@ def tokens_equal(presented: str, expected: str) -> bool:
     return hmac.compare_digest(a, b)
 
 
+def require_local_or_bearer(
+    request: Request,
+    authorization: Annotated[Optional[str], Header()] = None,
+) -> None:
+    """Allow loopback reads without a token; require bearer auth off-box."""
+    from titan.config import settings
+
+    if (
+        is_loopback(request)
+        and settings.allow_unauthenticated_loopback
+        and not settings.api_token
+        and settings.env != "production"
+    ):
+        return
+    require_bearer(request, authorization)
+
+
 def require_bearer(
     request: Request,
     authorization: Annotated[Optional[str], Header()] = None,
