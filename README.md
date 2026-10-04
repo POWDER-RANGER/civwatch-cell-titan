@@ -34,14 +34,19 @@ curl -s -X POST 'localhost:8000/api/telemetry/demo?count=1' \
 
 | Route class | Auth |
 |-------------|------|
-| GET health/status/recent/evidence | Open on loopback (reads stay local-first) |
+| GET health | Open for service discovery; metadata is operational only |
+| GET status/sensors/recent/evidence | Loopback in explicit development mode; bearer required off-box |
 | POST telemetry, sample, demo | Bearer when token set / production |
 | POST sensors/discover, capture | Bearer **and** `ADB_ENABLED=true` |
 | WS `/ws/live` | First message `{"type":"auth","token":"..."}` when token configured |
 
 Token checks use `hmac.compare_digest`. Do **not** put the token in the WebSocket URL.
 
-**Do not** use `HOST=0.0.0.0` for a phone on Wi‑Fi unless the token is set **and** Titan sits behind TLS or a VPN.
+**Do not** use `HOST=0.0.0.0` for a phone on Wi‑Fi unless the token is set **and** Titan sits behind TLS or a VPN. Remote reads are bearer-protected; health remains available for service discovery.
+
+## Integration
+
+CivilianIntelligence is the system of record. The hub can consume Titan health and, when `CELL_TITAN_API_TOKEN` is configured server-side, telemetry and evidence snapshots.
 
 ## License
 
