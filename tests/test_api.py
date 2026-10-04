@@ -9,6 +9,7 @@ os.environ["EVIDENCE_DIR"] = str(Path("/tmp/titan-test-evidence-api"))
 os.environ["AUTO_DEMO"] = "false"
 os.environ["SENSOR_ID"] = "test-sensor"
 os.environ["CELL_TITAN_ENV"] = "development"
+os.environ["ALLOW_UNAUTHENTICATED_LOOPBACK"] = "true"
 
 from main import app  # noqa: E402
 
