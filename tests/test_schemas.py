@@ -15,7 +15,7 @@ def test_sample_rejects_nested_metrics():
 
 
 def test_sample_ok():
-    s = SampleIn(domain="cellular", metrics={"rsrp_dbm": -90, "demo": True})
+    s = SampleIn(domain="cellular", metrics={"rsrp_dbm": -90, "observed": True})
     assert s.domain == "cellular"
 
 
