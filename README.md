@@ -33,12 +33,22 @@ exposed by this API.
 
 ## Quick start
 
-~~~bash
-pip install -r requirements.txt
-cp .env.example .env
-./launch.sh
-# http://127.0.0.1:8000
+### One-click local Android setup
 
+1. Install the current Android SDK Platform Tools so `adb` is available on your PATH.
+2. On Android, enable **Developer options → USB debugging**, connect the phone by USB, unlock it, and accept the computer's RSA debugging prompt.
+3. Double-click **START-TITAN.bat** on Windows, or run **START-TITAN.command / START-TITAN.sh** on macOS/Linux.
+
+The launcher creates a private Python virtual environment, installs Titan's pinned dependencies, generates a local bearer credential, enables ADB for the local collector, starts Titan on `127.0.0.1:8000`, and opens the setup page. The browser receives only a loopback-bound session cookie; the long-lived bearer credential is never embedded in page JavaScript.
+
+If Android is connected but still shows `unauthorized`, unlock the device and accept the RSA prompt, then click **Check ADB** followed by **Discover ADB**.
+
+Android's official documentation confirms that ADB is part of Android SDK Platform Tools and that USB debugging plus explicit RSA authorization are required for an attached device to appear as an authorized `device`. citeturn770267search2turn770267search3
+
+### Manual start
+
+~~~bash
+./launch.sh
 pytest -q
 ~~~
 
