@@ -23,6 +23,14 @@ except ImportError:
     Request = object  # type: ignore
 
 
+LOCAL_SESSION_COOKIE = "titan_local_session"
+_LOCAL_SESSION_TOKEN = secrets.token_urlsafe(32)
+
+
+def local_session_token() -> str:
+    return _LOCAL_SESSION_TOKEN
+
+
 def is_loopback(request: Request) -> bool:
     host = (request.client.host if getattr(request, "client", None) else "") or ""
     return host in ("127.0.0.1", "::1", "localhost", "testclient")
@@ -39,11 +47,21 @@ def tokens_equal(presented: str, expected: str) -> bool:
     return hmac.compare_digest(a, b)
 
 
+def valid_local_session(request: Request) -> bool:
+    from titan.config import settings
+    if settings.env == "production" or not is_loopback(request):
+        return False
+    presented = (request.cookies.get(LOCAL_SESSION_COOKIE) or "").strip()
+    return bool(presented) and tokens_equal(presented, _LOCAL_SESSION_TOKEN)
+
+
 def require_local_or_bearer(
     request: Request,
     authorization: Annotated[Optional[str], Header()] = None,
 ) -> None:
-    """Allow loopback reads without a token; require bearer auth off-box."""
+    """Allow the localhost setup session; require bearer auth off-box."""
+    if valid_local_session(request):
+        return
     from titan.config import settings
 
     if (
@@ -52,6 +70,16 @@ def require_local_or_bearer(
         and not settings.api_token
         and settings.env != "production"
     ):
+        return
+    require_bearer(request, authorization)
+
+
+def require_privileged(
+    request: Request,
+    authorization: Annotated[Optional[str], Header()] = None,
+) -> None:
+    """Accept the local setup session only on loopback; otherwise require bearer auth."""
+    if valid_local_session(request):
         return
     require_bearer(request, authorization)
 
