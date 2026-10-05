@@ -33,13 +33,14 @@ def test_read_health_open(client):
 
 
 def test_write_requires_token(client):
-    r = client.post("/api/telemetry/demo?count=1")
+    r = client.post("/api/telemetry/sample", json={"domain": "cellular", "metrics": {"rat": "LTE"}})
     assert r.status_code == 401
 
 
 def test_write_with_token(client):
     r = client.post(
-        "/api/telemetry/demo?count=1",
+        "/api/telemetry/sample",
+        json={"domain": "cellular", "metrics": {"rat": "LTE"}},
         headers={"Authorization": "Bearer test-secret-token-xyz"},
     )
     assert r.status_code == 200
@@ -47,7 +48,8 @@ def test_write_with_token(client):
 
 def test_bad_token_rejected(client):
     r = client.post(
-        "/api/telemetry/demo?count=1",
+        "/api/telemetry/sample",
+        json={"domain": "cellular", "metrics": {"rat": "LTE"}},
         headers={"Authorization": "Bearer wrong"},
     )
     assert r.status_code == 401
