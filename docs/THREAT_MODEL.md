@@ -38,5 +38,4 @@ Provide **defensive** RF situational awareness with **tamper-evident** local evi
 ## Residual risks
 
 - Process-level compromise can append false evidence (mitigation: external log shipping / future signatures).
-- Demo samples could be mistaken for live captures if UI is ignored (mitigation: mandatory `demo: true` flag).
 - ADB dumps vary by OEM; absence of fields is not proof of absence of RF activity.
