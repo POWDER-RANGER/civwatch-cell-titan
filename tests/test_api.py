@@ -74,3 +74,17 @@ def test_status(client):
     body = client.get("/api/status").json()
     assert body["release"] == "public"
     assert "assurance" in body
+
+
+def test_user_observation_contract(client):
+    client.post("/api/telemetry/demo?count=2")
+    r = client.get("/api/observations?n=5")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["schema_version"] == "1.0"
+    assert body["owner_scope"] == "user_device"
+    assert body["state"] == "demo"
+    assert isinstance(body["samples"], list)
+    assert body["privacy"]["public_submission"] == "explicit_user_action"
+    assert body["privacy"]["server_side_discovery"] is False
+    assert any("do not by themselves prove interception" in x for x in body["limitations"])
