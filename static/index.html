@@ -1,122 +1,49 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>CELL TITAN — CIVWATCH</title>
-  <meta name="description" content="Defensive RF observability — CIVINTELLIGENCE pillar" />
-  <style>
-    :root { color-scheme: dark; --bg:#0d1117; --card:#161b22; --line:#30363d; --cyan:#00e5ff; --muted:#8b949e; --ok:#3fb950; --warn:#d29922; }
-    * { box-sizing: border-box; }
-    body { margin: 0; font-family: ui-sans-serif, system-ui, sans-serif; background: var(--bg); color: #e6edf3; }
-    header { padding: 1.25rem 1.5rem; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; }
-    h1 { margin: 0; font-size: 1.35rem; letter-spacing: 0.06em; color: var(--cyan); }
-    main { padding: 1.25rem; max-width: 1100px; margin: 0 auto; display: grid; gap: 1rem; }
-    .grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
-    .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 1rem 1.15rem; }
-    .row { display: flex; gap: 0.6rem; flex-wrap: wrap; align-items: center; }
-    button { background: var(--cyan); color: #001018; border: 0; border-radius: 8px; padding: 0.5rem 0.85rem; font-weight: 600; cursor: pointer; font-size: 13px; }
-    button.secondary { background: #238636; color: #fff; }
-    button.ghost { background: transparent; color: var(--cyan); border: 1px solid var(--line); }
-    button:hover { filter: brightness(1.08); }
-    pre { background: #0d1117; border: 1px solid var(--line); border-radius: 8px; padding: 0.75rem; overflow: auto; font-size: 11px; max-height: 260px; margin: 0.5rem 0 0; }
-    .pill { font-size: 11px; padding: 0.2rem 0.55rem; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
-    .pill.ok { color: var(--ok); border-color: var(--ok); }
-    .pill.warn { color: var(--warn); border-color: var(--warn); }
-    a { color: var(--cyan); }
-    .metric { font-size: 1.75rem; font-weight: 600; font-variant-numeric: tabular-nums; }
-    .label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--muted); }
-    #live-log { max-height: 200px; }
-  </style>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CELL TITAN — one-click ADB setup</title>
+<style>
+:root{color-scheme:dark;--bg:#0d1117;--card:#161b22;--line:#30363d;--cyan:#00e5ff;--muted:#8b949e;--ok:#3fb950;--warn:#d29922;--bad:#f85149}
+*{box-sizing:border-box}body{margin:0;font-family:ui-sans-serif,system-ui,sans-serif;background:var(--bg);color:#e6edf3}
+header{padding:1.25rem 1.5rem;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap}
+h1{margin:0;font-size:1.35rem;letter-spacing:.06em;color:var(--cyan)}main{padding:1.25rem;max-width:1100px;margin:0 auto;display:grid;gap:1rem}.grid{display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:1rem 1.15rem}.row{display:flex;gap:.6rem;flex-wrap:wrap;align-items:center}
+button{background:var(--cyan);color:#001018;border:0;border-radius:8px;padding:.5rem .85rem;font-weight:600;cursor:pointer;font-size:13px}button.secondary{background:#238636;color:#fff}button.ghost{background:transparent;color:var(--cyan);border:1px solid var(--line)}
+pre{background:#0d1117;border:1px solid var(--line);border-radius:8px;padding:.75rem;overflow:auto;font-size:11px;max-height:280px;margin:.5rem 0 0}.pill{font-size:11px;padding:.2rem .55rem;border-radius:999px;border:1px solid var(--line);color:var(--muted)}.pill.ok{color:var(--ok);border-color:var(--ok)}.pill.warn{color:var(--warn);border-color:var(--warn)}.pill.bad{color:var(--bad);border-color:var(--bad)}
+a{color:var(--cyan)}.metric{font-size:1.75rem;font-weight:600;font-variant-numeric:tabular-nums}.label{font-size:10px;text-transform:uppercase;letter-spacing:.12em;color:var(--muted)}
+.step{display:grid;grid-template-columns:2rem 1fr;gap:.75rem;align-items:start;margin:.65rem 0}.n{width:2rem;height:2rem;border:1px solid var(--line);border-radius:50%;display:grid;place-items:center;color:var(--cyan);font-weight:700}.small{font-size:12px;color:var(--muted)}code{background:#0d1117;padding:.1rem .3rem;border-radius:4px}
+</style>
 </head>
 <body>
-  <header>
-    <div>
-      <h1>CELL TITAN</h1>
-      <p style="margin:0.3rem 0 0;color:var(--muted);font-size:13px">Defensive RF observability · CIVINTELLIGENCE pillar · v<span id="ver">…</span></p>
-    </div>
-    <div class="row">
-      <span id="health" class="pill">checking…</span>
-      <span id="ws" class="pill">ws: off</span>
-    </div>
-  </header>
-  <main>
-    <div class="grid">
-      <div class="card"><div class="label">Buffered samples</div><div class="metric" id="m-buf">—</div></div>
-      <div class="card"><div class="label">Evidence length</div><div class="metric" id="m-ev">—</div></div>
-      <div class="card"><div class="label">Live listeners</div><div class="metric" id="m-ls">—</div></div>
-      <div class="card"><div class="label">Sensors</div><div class="metric" id="m-sn">—</div></div>
-    </div>
-    <div class="card">
-      <div class="row">
-        <button id="btn-discover" class="ghost">Discover ADB</button>
-        <button id="btn-verify" class="secondary">Verify chain</button>
-        <a href="/docs">OpenAPI</a>
-        <a href="https://github.com/POWDER-RANGER/CivilianIntelligence">CIVINTELLIGENCE</a>
-      </div>
-      <p style="color:var(--muted);font-size:12px;margin:0.75rem 0 0">
-        This interface shows observed device telemetry only. Cellular/Wi-Fi collection requires an attached
-        Android device with USB debugging and <code>adbutils</code>; unsupported domains remain explicitly unavailable.
-      </p>
-    </div>
-    <div class="grid">
-      <div class="card">
-        <h2 style="margin:0;font-size:0.95rem">Live stream</h2>
-        <pre id="live-log">connecting…</pre>
-      </div>
-      <div class="card">
-        <h2 style="margin:0;font-size:0.95rem">Recent telemetry</h2>
-        <pre id="telemetry">[]</pre>
-      </div>
-    </div>
-    <div class="card">
-      <h2 style="margin:0;font-size:0.95rem">Evidence tail</h2>
-      <pre id="evidence">[]</pre>
-    </div>
-  </main>
-  <script>
-    const logEl = document.getElementById('live-log');
-    const lines = [];
-    function log(msg) {
-      lines.push(typeof msg === 'string' ? msg : JSON.stringify(msg));
-      if (lines.length > 40) lines.shift();
-      logEl.textContent = lines.join('\n');
-      logEl.scrollTop = logEl.scrollHeight;
-    }
-    async function j(url, opts) {
-      const r = await fetch(url, opts);
-      return r.json();
-    }
-    async function refresh() {
-      const h = await j('/api/health');
-      document.getElementById('ver').textContent = h.version || '';
-      const el = document.getElementById('health');
-      el.textContent = h.status + ' · evidence ' + (h.evidence?.ok ? 'intact' : 'BROKEN');
-      el.className = 'pill' + (h.status === 'ok' ? ' ok' : ' warn');
-      document.getElementById('m-buf').textContent = h.buffer?.buffered ?? '—';
-      document.getElementById('m-ev').textContent = h.evidence?.length ?? '—';
-      document.getElementById('m-ls').textContent = h.listeners ?? '—';
-      const s = await j('/api/sensors');
-      document.getElementById('m-sn').textContent = (s.sensors || []).length;
-      document.getElementById('telemetry').textContent = JSON.stringify((await j('/api/telemetry/recent?n=10')).samples, null, 2);
-      document.getElementById('evidence').textContent = JSON.stringify((await j('/api/evidence/tail?n=6')).records, null, 2);
-    }
-    function connectWs() {
-      const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-      const ws = new WebSocket(proto + '://' + location.host + '/ws/live');
-      const badge = document.getElementById('ws');
-      ws.onopen = () => { badge.textContent = 'ws: live'; badge.className = 'pill ok'; log('ws open'); };
-      ws.onclose = () => { badge.textContent = 'ws: off'; badge.className = 'pill'; log('ws closed — retry in 3s'); setTimeout(connectWs, 3000); };
-      ws.onmessage = (ev) => {
-        try { log(JSON.parse(ev.data)); } catch { log(ev.data); }
-        refresh();
-      };
-    }
-    document.getElementById('btn-discover').onclick = async () => { log(await j('/api/sensors/discover', { method: 'POST' })); refresh(); };
-    document.getElementById('btn-verify').onclick = async () => { alert(JSON.stringify(await j('/api/evidence/verify'), null, 2)); refresh(); };
-    refresh();
-    connectWs();
-    setInterval(refresh, 12000);
-  </script>
-</body>
-</html>
+<header><div><h1>CELL TITAN</h1><p style="margin:.3rem 0 0;color:var(--muted);font-size:13px">Local ADB collector · user-owned device telemetry · evidence-first</p></div><div class="row"><span id="health" class="pill">checking…</span><span id="adb" class="pill">ADB: checking…</span></div></header>
+<main>
+<section class="card">
+<h2 style="margin:0;font-size:1.05rem">One-click setup</h2>
+<p class="small">Run <b>START-TITAN</b> from the repository after installing Android Platform Tools. Titan stays on <code>127.0.0.1</code>; it never needs your USB-connected phone exposed to the internet.</p>
+<div class="step"><span class="n">1</span><div><b>Connect your Android phone by USB.</b><div class="small">Keep the phone unlocked during first pairing.</div></div></div>
+<div class="step"><span class="n">2</span><div><b>Enable USB debugging.</b><div class="small">Android: Developer options → USB debugging. Android 16 also supports Wireless debugging, but this one-click path is USB-first.</div></div></div>
+<div class="step"><span class="n">3</span><div><b>Accept the RSA authorization prompt.</b><div class="small">The phone must explicitly trust this computer before ADB reports it as <code>device</code>.</div></div></div>
+<div class="step"><span class="n">4</span><div><b>Click Discover ADB.</b><div class="small">Titan registers only devices actually visible through ADB.</div></div></div>
+<div class="row" style="margin-top:.8rem"><button id="btn-check">Check ADB</button><button id="btn-discover" class="secondary">Discover ADB</button><button id="btn-capture" class="ghost">Capture cellular + Wi-Fi</button></div>
+<div id="setup-msg" class="small" style="margin-top:.6rem"></div>
+<pre id="devices">Checking local ADB…</pre>
+</section>
+<div class="grid"><div class="card"><div class="label">Buffered samples</div><div class="metric" id="m-buf">—</div></div><div class="card"><div class="label">Evidence length</div><div class="metric" id="m-ev">—</div></div><div class="card"><div class="label">Sensors</div><div class="metric" id="m-sn">—</div></div></div>
+<div class="grid"><div class="card"><h2 style="margin:0;font-size:.95rem">Recent telemetry</h2><pre id="telemetry">[]</pre></div><div class="card"><h2 style="margin:0;font-size:.95rem">Evidence tail</h2><pre id="evidence">[]</pre></div></div>
+<section class="card"><h2 style="margin:0;font-size:.95rem">Limitations</h2><div class="small">Titan reports telemetry observed from devices you control. It does not by itself establish interception, malicious activity, ownership of third-party signals, or causation. ADB collection depends on device support and Android permissions. Evidence hashing provides integrity, not independent origin authentication.</div></section>
+</main>
+<script>
+let localReady=false;const $=id=>document.getElementById(id);
+async function j(url,opts){const r=await fetch(url,{credentials:"same-origin",...opts});let body={};try{body=await r.json()}catch{}if(!r.ok)throw Object.assign(new Error(body.detail||("HTTP "+r.status)),{status:r.status,body});return body}
+function msg(s,kind=""){ $("setup-msg").textContent=s; $("setup-msg").className="small"+(kind==="bad"?" pill bad":kind==="ok"?" pill ok":kind==="warn"?" pill warn":" small");}
+async function startLocalSession(){try{await j("/api/setup/session");localReady=true;msg("Local setup session ready.","ok")}catch{localReady=false}}
+async function health(){try{const h=await j("/api/health");const e=$("health");e.textContent=h.status+" · evidence "+(h.evidence?.ok?"intact":"BROKEN");e.className="pill "+(h.status==="ok"?"ok":"warn");$("m-buf").textContent=h.buffer?.buffered??"—";$("m-ev").textContent=h.evidence?.length??"—"}catch(e){msg("Titan health unavailable: "+e.message,"bad")}}
+async function check(){if(!localReady){msg("Open Titan locally to use ADB setup; the public Render service intentionally does not accept browser ADB control.","warn");return}try{const s=await j("/api/setup/check");$("adb").textContent="ADB: "+(s.adb.available?"found":"missing");$("adb").className="pill "+(s.ready?"ok":s.adb.available?"warn":"bad");$("devices").textContent=JSON.stringify(s,null,2);if(!s.adb.available)msg("Install Android SDK Platform Tools so adb is on PATH.","warn");else if(s.adb.devices.some(d=>d.state==="unauthorized"))msg("Unlock the phone and accept the USB debugging authorization prompt, then Check ADB again.","warn");else if(s.ready)msg("ADB sees an authorized device. Discover it next.","ok");else msg("ADB is installed, but no authorized device is ready.","warn")}catch(e){msg(e.message,"bad")}}
+async function sensors(){if(!localReady)return;try{const s=await j("/api/sensors");$("m-sn").textContent=(s.sensors||[]).length;return s}catch(e){msg(e.message,"bad")}}
+async function refreshData(){if(!localReady)return;try{$("telemetry").textContent=JSON.stringify((await j("/api/telemetry/recent?n=10")).samples,null,2);$("evidence").textContent=JSON.stringify((await j("/api/evidence/tail?n=6")).records,null,2)}catch(e){msg(e.message,"bad")}}
+async function discover(){if(!localReady){msg("Start Titan locally first.","warn");return}try{const r=await j("/api/sensors/discover",{method:"POST"});msg("Discovered "+r.found.length+" device(s). Evidence seq "+r.evidence_seq+".","ok");await sensors();await refreshData();await check()}catch(e){msg(e.message,"bad")}}
+async function capture(){if(!localReady){msg("Start Titan locally first.","warn");return}const s=await sensors();const dev=(s?.sensors||[])[0];if(!dev){msg("No ADB sensor registered. Click Discover ADB first.","warn");return}try{const r=await j("/api/sensors/capture",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({sensor_id:dev.id,domains:["cellular","wifi"]})});msg("Captured "+r.emitted+" sample(s).","ok");await refreshData()}catch(e){msg(e.message,"bad")}}
+$("btn-check").onclick=check;$("btn-discover").onclick=discover;$("btn-capture").onclick=capture;(async()=>{await startLocalSession();await health();await check();await sensors();await refreshData()})();setInterval(()=>{health();check();refreshData()},12000);
+</script>
+</body></html>
