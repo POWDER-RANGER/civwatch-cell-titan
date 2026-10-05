@@ -4,7 +4,6 @@ cd "$(dirname "$0")"
 python3 -m pip install -r requirements.txt -q
 mkdir -p data/evidence
 export SENSOR_ID="${SENSOR_ID:-civwatch-titan-local}"
-export AUTO_DEMO="${AUTO_DEMO:-false}"
 export HOST="${HOST:-127.0.0.1}"
 echo "CELL TITAN v0.1.2 → http://${HOST}:${PORT:-8000}"
 echo "  default bind is loopback; set TITAN_API_TOKEN before any LAN exposure"

@@ -21,7 +21,6 @@ jobs:
         run: pip install -r requirements.txt
       - name: Test
         env:
-          AUTO_DEMO: "false"
           EVIDENCE_DIR: /tmp/civwatch-evidence-ci
           CELL_TITAN_ENV: development
         run: python -m pytest -q --tb=short

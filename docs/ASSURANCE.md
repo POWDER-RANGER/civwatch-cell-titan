@@ -9,8 +9,7 @@
 | C3 | Concurrent appends do not interleave lines | Thread lock + `test_concurrent_appends` |
 | C4 | Mutating API rejects unknown fields | Pydantic `extra=forbid`, `test_sample_rejects_extra_fields` |
 | C5 | Oversized bodies rejected | `BodySizeLimitMiddleware` |
-| C6 | Demo data is labeled | `synthetic_sample` always sets `demo: True` |
-| C7 | Production refuses wildcard CORS | `Settings.cors_list` |
+| C6 | Production refuses wildcard CORS | `Settings.cors_list` |
 
 ## Test command
 

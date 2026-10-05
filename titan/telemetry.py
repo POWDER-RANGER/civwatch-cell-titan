@@ -26,36 +26,6 @@ def _utc() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
-def synthetic_sample(domain: Domain, sensor_id: str, *, rng: random.Random | None = None) -> RfSample:
-    """Demo sample. Always sets demo=True. Pass rng for deterministic tests."""
-    r = rng or random.Random()
-    if domain == "cellular":
-        metrics: dict[str, Any] = {
-            "rat": r.choice(["LTE", "NR", "LTE"]),
-            "rsrp_dbm": r.randint(-110, -70),
-            "rsrq_db": r.randint(-18, -6),
-            "pci": r.randint(1, 503),
-            "earfcn": r.randint(0, 65535),
-            "demo": True,
-        }
-    elif domain == "wifi":
-        metrics = {
-            "ssid_hash": f"h{r.randint(1000, 9999)}",
-            "bssid_prefix": "aa:bb:cc",
-            "rssi_dbm": r.randint(-90, -40),
-            "freq_mhz": r.choice([2412, 2437, 2462, 5180, 5220]),
-            "demo": True,
-        }
-    elif domain == "d2d":
-        metrics = {"sidelink": True, "rssi_dbm": r.randint(-100, -50), "demo": True}
-    else:
-        metrics = {
-            "tech": r.choice(["BLE", "BT", "NFC"]),
-            "rssi_dbm": r.randint(-90, -30),
-            "demo": True,
-        }
-    return RfSample(domain=domain, sensor_id=sensor_id, ts=_utc(), metrics=metrics)
-
 
 class SampleBuffer:
     def __init__(self, capacity: int = 500) -> None:

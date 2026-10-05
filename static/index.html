@@ -49,15 +49,14 @@
     </div>
     <div class="card">
       <div class="row">
-        <button id="btn-demo">Emit demo samples</button>
         <button id="btn-discover" class="ghost">Discover ADB</button>
         <button id="btn-verify" class="secondary">Verify chain</button>
         <a href="/docs">OpenAPI</a>
         <a href="https://github.com/POWDER-RANGER/CivilianIntelligence">CIVINTELLIGENCE</a>
       </div>
       <p style="color:var(--muted);font-size:12px;margin:0.75rem 0 0">
-        Demo mode needs no phone. Live ADB capture requires USB debugging and <code>adbutils</code>.
-        Synthetic samples are labeled <code>demo: true</code> and sealed into a local hash chain.
+        This interface shows observed device telemetry only. Cellular/Wi-Fi collection requires an attached
+        Android device with USB debugging and <code>adbutils</code>; unsupported domains remain explicitly unavailable.
       </p>
     </div>
     <div class="grid">
@@ -113,7 +112,6 @@
         refresh();
       };
     }
-    document.getElementById('btn-demo').onclick = async () => { await j('/api/telemetry/demo?count=4', { method: 'POST' }); refresh(); };
     document.getElementById('btn-discover').onclick = async () => { log(await j('/api/sensors/discover', { method: 'POST' })); refresh(); };
     document.getElementById('btn-verify').onclick = async () => { alert(JSON.stringify(await j('/api/evidence/verify'), null, 2)); refresh(); };
     refresh();

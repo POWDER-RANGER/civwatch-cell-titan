@@ -27,8 +27,6 @@ class Settings:
         "CORS_ORIGINS",
         "http://127.0.0.1:8000,http://localhost:8000",
     )
-    auto_demo: bool = _bool("AUTO_DEMO", "false")
-    demo_interval_sec: float = float(os.environ.get("DEMO_INTERVAL_SEC", "15"))
     rate_limit_per_min: int = int(os.environ.get("RATE_LIMIT_PER_MIN", "120"))
     max_body_bytes: int = int(os.environ.get("MAX_BODY_BYTES", "65536"))
     api_token: str = os.environ.get("TITAN_API_TOKEN", "")

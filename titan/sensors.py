@@ -1,4 +1,4 @@
-"""Sensor registry. ADB discovery is optional; demo mode always works offline."""
+"""Sensor registry for user-owned physical collectors."""
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
@@ -26,16 +26,8 @@ class Sensor:
 class SensorRegistry:
     def __init__(self, default_id: str) -> None:
         self._sensors: dict[str, Sensor] = {}
-        self.register(
-            Sensor(
-                id=default_id,
-                label="Local demo sensor",
-                mode="demo",
-                last_seen=_utc(),
-                domains=["cellular", "wifi", "d2d", "transport"],
-                meta={"note": "Synthetic samples only until an ADB device is attached"},
-            )
-        )
+        # Do not register a fictional/default sensor. A sensor becomes real only
+        # after an attached collector is discovered or explicitly registered.
 
     def register(self, sensor: Sensor) -> Sensor:
         self._sensors[sensor.id] = sensor

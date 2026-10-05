@@ -48,7 +48,6 @@ class HealthOut(BaseModel):
     evidence: dict[str, Any]
     buffer: dict[str, Any]
     listeners: int
-    auto_demo: bool
     civintelligence: str
 
 
