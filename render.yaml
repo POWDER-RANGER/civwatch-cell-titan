@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: civwatch-cell-titan
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/health
+    autoDeployTrigger: commit
+    envVars:
+      - key: CELL_TITAN_ENV
+        value: production
+      - key: REQUIRE_AUTH
+        value: "true"
+      - key: DEBUG
+        value: "false"
+      - key: ADB_ENABLED
+        value: "false"
+      - key: TITAN_API_TOKEN
+        sync: false
+      - key: CORS_ORIGINS
+        value: ""
