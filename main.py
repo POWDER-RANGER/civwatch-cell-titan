@@ -3,18 +3,21 @@ from __future__ import annotations
 
 import asyncio
 import json
+import shutil
+import subprocess
+import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, Literal
 
-from fastapi import Depends, FastAPI, Query, WebSocket, WebSocketDisconnect
+from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from titan import __version__
 from titan.adb_collect import collect_cellular, collect_wifi
-from titan.auth import assert_boot_auth, require_adb_enabled, require_bearer, require_local_or_bearer, tokens_equal
+from titan.auth import LOCAL_SESSION_COOKIE, assert_boot_auth, is_loopback, local_session_token, require_adb_enabled, require_bearer, require_local_or_bearer, require_privileged, tokens_equal
 from titan.config import settings
 from titan.evidence import EvidenceChain
 from titan.health_cache import cached_verify
@@ -86,6 +89,54 @@ def health() -> dict[str, Any]:
     }
 
 
+@app.get("/api/setup/session")
+def setup_session(request: Request, response: Response) -> dict[str, Any]:
+    if settings.env == "production" or not is_loopback(request):
+        raise HTTPException(status_code=404, detail="local_setup_only")
+    response.set_cookie(
+        key=LOCAL_SESSION_COOKIE,
+        value=local_session_token(),
+        max_age=86400,
+        httponly=True,
+        samesite="strict",
+        secure=False,
+        path="/",
+    )
+    return {
+        "ok": True,
+        "mode": "local_setup",
+        "adb_enabled": settings.adb_enabled,
+        "message": "Local browser session established; privileged ADB actions remain loopback-only.",
+    }
+
+
+@app.get("/api/setup/check")
+def setup_check(request: Request) -> dict[str, Any]:
+    if settings.env == "production" or not is_loopback(request):
+        raise HTTPException(status_code=404, detail="local_setup_only")
+    adb = shutil.which("adb")
+    devices: list[dict[str, Any]] = []
+    if adb:
+        try:
+            p = subprocess.run([adb, "devices", "-l"], capture_output=True, text=True, timeout=8, check=False)
+            for line in p.stdout.splitlines():
+                line = line.strip()
+                if not line or line.startswith("List of devices attached"):
+                    continue
+                parts = line.split()
+                if len(parts) >= 2:
+                    devices.append({"serial": parts[0], "state": parts[1], "details": parts[2:]})
+        except Exception as ex:
+            devices.append({"error": str(ex)})
+    return {
+        "python": sys.version.split()[0],
+        "adb": {"available": bool(adb), "path": adb, "devices": devices},
+        "adb_enabled": settings.adb_enabled,
+        "ready": bool(adb) and any(d.get("state") == "device" for d in devices if isinstance(d, dict)),
+        "next": "unlock_device_and_accept_usb_debugging" if any(d.get("state") == "unauthorized" for d in devices if isinstance(d, dict)) else None,
+    }
+
+
 @app.get("/api/version")
 def version() -> dict[str, str]:
     return {"version": __version__, "service": "cell-titan"}
@@ -96,7 +147,7 @@ def list_sensors() -> dict[str, Any]:
     return {"sensors": registry.list()}
 
 
-@app.post("/api/sensors/discover", dependencies=[Depends(require_bearer), Depends(require_adb_enabled)])
+@app.post("/api/sensors/discover", dependencies=[Depends(require_privileged), Depends(require_adb_enabled)])
 async def discover_sensors() -> dict[str, Any]:
     found = registry.discover_adb()
     rec = chain.append("sensor_discover", {"found": len(found), "items": found})
@@ -104,7 +155,7 @@ async def discover_sensors() -> dict[str, Any]:
     return {"found": found, "evidence_seq": rec.seq, "evidence_hash": rec.hash}
 
 
-@app.post("/api/sensors/capture", dependencies=[Depends(require_bearer), Depends(require_adb_enabled)])
+@app.post("/api/sensors/capture", dependencies=[Depends(require_privileged), Depends(require_adb_enabled)])
 async def capture_adb(body: CaptureIn) -> Any:
     sensor = registry.get(body.sensor_id)
     if not sensor or sensor.mode != "adb":
@@ -166,6 +217,29 @@ async def ingest_sample(body: SampleIn) -> dict[str, Any]:
     return out
 
 
+
+@app.post("/api/telemetry/demo", dependencies=[Depends(require_bearer)])
+async def ingest_demo(count: int = Query(1, ge=1, le=100)) -> dict[str, Any]:
+    """Emit explicitly synthetic samples for UI/tests; never masquerade as device data."""
+    emitted = []
+    for i in range(count):
+        domain: Domain = "cellular" if i % 2 == 0 else "wifi"
+        metrics = (
+            {"demo": True, "source": "synthetic", "rat": "LTE", "rsrp_dbm": -90 + (i % 7)}
+            if domain == "cellular"
+            else {"demo": True, "source": "synthetic", "rssi_dbm": -55 - (i % 8), "freq_mhz": 2400}
+        )
+        sample = RfSample(domain=domain, sensor_id=settings.sensor_id, ts=_utc(), metrics=metrics)
+        buffer.push(sample)
+        rec = chain.append(
+            "telemetry_demo",
+            {"domain": sample.domain, "sensor_id": sample.sensor_id, "metrics": metrics, "synthetic": True},
+        )
+        event = {"type": "telemetry", "sample": sample.to_dict(), "evidence_seq": rec.seq, "evidence_hash": rec.hash}
+        await hub.publish(event)
+        emitted.append(event)
+    return {"emitted": len(emitted), "items": emitted, "state": "demo"}
+
 @app.get("/api/telemetry/recent", dependencies=[Depends(require_local_or_bearer)])
 def recent_telemetry(
     n: int = Query(50, ge=1, le=500),
@@ -212,7 +286,11 @@ async def ws_live(ws: WebSocket) -> None:
             and not settings.api_token
             and settings.env != "production"
         )
-        if not open_loop:
+        local_session = False
+        if client_host in ("127.0.0.1", "::1", "localhost", "testclient") and settings.env != "production":
+            cookie = (ws.cookies.get(LOCAL_SESSION_COOKIE) or "").strip()
+            local_session = bool(cookie) and tokens_equal(cookie, local_session_token())
+        if not open_loop and not local_session:
             try:
                 raw = await asyncio.wait_for(ws.receive_text(), timeout=5.0)
                 if len(raw) > 4096:
