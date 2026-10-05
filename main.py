@@ -217,6 +217,29 @@ async def ingest_sample(body: SampleIn) -> dict[str, Any]:
     return out
 
 
+
+@app.post("/api/telemetry/demo", dependencies=[Depends(require_bearer)])
+async def ingest_demo(count: int = Query(1, ge=1, le=100)) -> dict[str, Any]:
+    """Emit explicitly synthetic samples for UI/tests; never masquerade as device data."""
+    emitted = []
+    for i in range(count):
+        domain: Domain = "cellular" if i % 2 == 0 else "wifi"
+        metrics = (
+            {"demo": True, "source": "synthetic", "rat": "LTE", "rsrp_dbm": -90 + (i % 7)}
+            if domain == "cellular"
+            else {"demo": True, "source": "synthetic", "rssi_dbm": -55 - (i % 8), "freq_mhz": 2400}
+        )
+        sample = RfSample(domain=domain, sensor_id=settings.sensor_id, ts=_utc(), metrics=metrics)
+        buffer.push(sample)
+        rec = chain.append(
+            "telemetry_demo",
+            {"domain": sample.domain, "sensor_id": sample.sensor_id, "metrics": metrics, "synthetic": True},
+        )
+        event = {"type": "telemetry", "sample": sample.to_dict(), "evidence_seq": rec.seq, "evidence_hash": rec.hash}
+        await hub.publish(event)
+        emitted.append(event)
+    return {"emitted": len(emitted), "items": emitted, "state": "demo"}
+
 @app.get("/api/telemetry/recent", dependencies=[Depends(require_local_or_bearer)])
 def recent_telemetry(
     n: int = Query(50, ge=1, le=500),
