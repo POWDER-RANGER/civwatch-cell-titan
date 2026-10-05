@@ -29,7 +29,6 @@ DOMAINS: tuple[Domain, ...] = ("cellular", "wifi", "d2d", "transport")
 registry = SensorRegistry(settings.sensor_id)
 buffer = SampleBuffer(capacity=2000)
 chain = EvidenceChain(settings.evidence_dir, settings.sensor_id)
-
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     assert_boot_auth()
@@ -46,7 +45,6 @@ async def lifespan(_app: FastAPI):
         },
     )
     yield
-
 ""CIVWATCH CELL TITAN - hardened public operational release."""
 from __future__ import annotations
 
@@ -78,7 +76,6 @@ DOMAINS: tuple[Domain, ...] = ("cellular", "wifi", "d2d", "transport")
 registry = SensorRegistry(settings.sensor_id)
 buffer = SampleBuffer(capacity=2000)
 chain = EvidenceChain(settings.evidence_dir, settings.sensor_id)
-
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     global _demo_task
@@ -198,10 +195,10 @@ async def capture_adb(body: CaptureIn) -> Any:
 def list_domains() -> dict[str, Any]:
     return {
         "domains": [
-            {"id": "cellular", "protocols": ["LTE", "5G NR", "GSM"], "status": "adb"},
-            {"id": "wifi", "protocols": ["802.11"], "status": "adb"},
-            {"id": "d2d", "protocols": ["LTE-D2D", "NR Sidelink"], "status": "not_implemented"},
-            {"id": "transport", "protocols": ["Bluetooth", "BLE", "NFC"], "status": "not_implemented"},
+            {"id": "cellular", "protocols": ["LTE", "5G NR", "GSM"], "status": "demo+adb"},
+            {"id": "wifi", "protocols": ["802.11"], "status": "demo+adb"},
+            {"id": "d2d", "protocols": ["LTE-D2D", "NR Sidelink"], "status": "demo"},
+            {"id": "transport", "protocols": ["Bluetooth", "BLE", "NFC"], "status": "demo"},
         ]
     }
 
@@ -213,7 +210,7 @@ async def ingest_sample(body: SampleIn) -> dict[str, Any]:
         domain=body.domain,
         sensor_id=sid,
         ts=_utc(),
-        metrics={**body.metrics, "demo": bool(body.metrics.get("demo", False))},
+        metrics=body.metrics,
     )
     buffer.push(sample)
     registry.touch(sid)
@@ -257,7 +254,6 @@ DOMAINS: tuple[Domain, ...] = ("cellular", "wifi", "d2d", "transport")
 registry = SensorRegistry(settings.sensor_id)
 buffer = SampleBuffer(capacity=2000)
 chain = EvidenceChain(settings.evidence_dir, settings.sensor_id)
-
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     assert_boot_auth()
@@ -274,7 +270,6 @@ async def lifespan(_app: FastAPI):
         },
     )
     yield
-
 ""CIVWATCH CELL TITAN - hardened public operational release."""
 from __future__ import annotations
 
@@ -306,7 +301,6 @@ DOMAINS: tuple[Domain, ...] = ("cellular", "wifi", "d2d", "transport")
 registry = SensorRegistry(settings.sensor_id)
 buffer = SampleBuffer(capacity=2000)
 chain = EvidenceChain(settings.evidence_dir, settings.sensor_id)
-
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     global _demo_task
@@ -426,10 +420,10 @@ async def capture_adb(body: CaptureIn) -> Any:
 def list_domains() -> dict[str, Any]:
     return {
         "domains": [
-            {"id": "cellular", "protocols": ["LTE", "5G NR", "GSM"], "status": "adb"},
-            {"id": "wifi", "protocols": ["802.11"], "status": "adb"},
-            {"id": "d2d", "protocols": ["LTE-D2D", "NR Sidelink"], "status": "not_implemented"},
-            {"id": "transport", "protocols": ["Bluetooth", "BLE", "NFC"], "status": "not_implemented"},
+            {"id": "cellular", "protocols": ["LTE", "5G NR", "GSM"], "status": "demo+adb"},
+            {"id": "wifi", "protocols": ["802.11"], "status": "demo+adb"},
+            {"id": "d2d", "protocols": ["LTE-D2D", "NR Sidelink"], "status": "demo"},
+            {"id": "transport", "protocols": ["Bluetooth", "BLE", "NFC"], "status": "demo"},
         ]
     }
 
