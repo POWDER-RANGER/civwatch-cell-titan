@@ -227,6 +227,38 @@ def recent_telemetry(
     return {"samples": buffer.recent(n, domain)}
 
 
+@app.get("/api/observations", dependencies=[Depends(require_local_or_bearer)])
+def observations(
+    n: int = Query(100, ge=1, le=500),
+    domain: Domain | None = None,
+) -> dict[str, Any]:
+    """Authenticated user-device observation envelope for CIVINT/App integration."""
+    samples = buffer.recent(n, domain)
+    if not samples:
+        state = "unavailable"
+    elif all(bool((sample.get("metrics") or {}).get("demo")) for sample in samples):
+        state = "demo"
+    else:
+        state = "live"
+    return {
+        "schema_version": "1.0",
+        "state": state,
+        "owner_scope": "user_device",
+        "privacy": {
+            "default_retention": "local",
+            "public_submission": "explicit_user_action",
+            "server_side_discovery": False,
+        },
+        "limitations": [
+            "Observations describe OS- or sensor-exposed telemetry and do not by themselves prove interception.",
+            "Raw baseband contents are not exposed by this API.",
+            "Cellular identifiers and fields vary by device, OS version, permissions, and collector mode.",
+        ],
+        "samples": samples,
+        "evidence": chain.tail(min(n, 200)),
+    }
+
+
 @app.get("/api/evidence/verify", dependencies=[Depends(require_local_or_bearer)])
 def evidence_verify() -> dict[str, Any]:
     return chain.verify()

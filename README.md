@@ -17,7 +17,19 @@ Cell Titan owns:
 - optional ADB discovery/capture
 - live telemetry streaming
 
-The hub can consume Titan health, telemetry, and evidence snapshots through a server-side integration rail.
+The hub can consume Titan health, telemetry, evidence, and the authenticated user-device observation envelope through a server-side integration rail.
+
+### CIVINT observation contract
+
+```text
+GET /api/observations?n=100&domain=cellular
+```
+
+The envelope carries an explicit `live`, `demo`, `snapshot`, or `unavailable` state,
+an `owner_scope: user_device` marker, bounded telemetry, evidence records, and
+limitations. It reports observations rather than declaring that an IMSI catcher,
+Stingray, or other specific interceptor was detected. Raw baseband contents are not
+exposed by this API.
 
 ## Quick start
 
