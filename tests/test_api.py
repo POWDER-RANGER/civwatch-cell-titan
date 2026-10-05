@@ -35,10 +35,12 @@ def test_version(client):
     assert client.get("/api/version").json()["version"]
 
 
-def test_demo_and_recent(client):
-    r = client.post("/api/telemetry/demo?count=4")
+def test_observed_sample_and_recent(client):
+    r = client.post(
+        "/api/telemetry/sample",
+        json={"domain": "cellular", "metrics": {"rat": "LTE", "rsrp_dbm": -91, "observed": True}},
+    )
     assert r.status_code == 200
-    assert r.json()["emitted"] == 4
     assert len(client.get("/api/telemetry/recent?n=10").json()["samples"]) >= 1
 
 
@@ -77,13 +79,16 @@ def test_status(client):
 
 
 def test_user_observation_contract(client):
-    client.post("/api/telemetry/demo?count=2")
+    client.post(
+        "/api/telemetry/sample",
+        json={"domain": "cellular", "metrics": {"rat": "LTE", "rsrp_dbm": -91, "observed": True}},
+    )
     r = client.get("/api/observations?n=5")
     assert r.status_code == 200
     body = r.json()
     assert body["schema_version"] == "1.0"
     assert body["owner_scope"] == "user_device"
-    assert body["state"] == "demo"
+    assert body["state"] == "live"
     assert isinstance(body["samples"], list)
     assert body["privacy"]["public_submission"] == "explicit_user_action"
     assert body["privacy"]["server_side_discovery"] is False
