@@ -120,3 +120,42 @@ curl -s 'http://127.0.0.1:8000/api/evidence/tail?n=20'
 ## License
 
 MIT
+
+
+---
+
+## Public platform status — October 2026
+
+**CIVINTELLIGENCE is live on the public web and its REST/API surface is active.**
+
+**Public site:** https://civintelligence.onrender.com
+
+The web platform is now the working reference implementation for the CIVWATCH ecosystem: the core application, public-data surfaces, evidence/provenance model, specialized pillars, and integration boundaries are being exercised through the deployed CIVINTELLIGENCE service.
+
+### Applications are next
+
+With the web application and REST contracts now active, the remaining client work is primarily **productization and platform packaging**, not rebuilding the intelligence platform from scratch. Native applications for the major target platforms are planned and will be coming soon.
+
+The application layer can consume the same stable contracts already used by the web experience:
+
+- **Android**
+- **iOS**
+- **Windows**
+- **Linux**
+- additional platform clients as the shared API contract matures
+
+The existing Flutter client and service boundaries give the ecosystem a head start. Mobile/desktop applications can progressively adopt the established authentication, API, provenance, map, evidence, and desk contracts rather than duplicating backend intelligence.
+
+### How quickly this came together
+
+The current milestone is notable because the ecosystem moved from a multi-repository architecture and integration plan to a functioning public platform in a short development window. The difficult architectural work — ownership boundaries, public-data ingestion, REST contracts, evidence/provenance rules, Watchtower/Cell Titan integration, and the user-facing desk model — is already substantially established.
+
+That means the next step should be treated as **client delivery on top of an operating platform**. The web application is the reference surface; native clients become additional presentation and interaction layers over the same CIVINTELLIGENCE contracts.
+
+> **Build once at the platform layer. Deliver many clients at the edge.**
+
+### Ecosystem rule
+
+CIVINTELLIGENCE remains the system of record. Specialized repositories retain clear ownership of their domains, while clients consume stable public/service contracts. Legacy and predecessor repositories remain valuable migration/reference material but are not silently represented as unified production capabilities.
+
+**Status discipline:** live means exposed and usable; available means implemented and integrated; in progress means actively being built; planned means not yet shipped. No synthetic or unavailable source is represented as live evidence.
