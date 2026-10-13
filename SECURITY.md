@@ -1,12 +1,47 @@
-# Security policy
+# Security Policy
 
-CELL TITAN is **defensive-only** RF observability software.
+## Project
 
-## Reporting
+civwatch-cell-titan: shell-based RF observability tooling for the CIVWATCH ecosystem. Defensive monitoring only.
 
-Report vulnerabilities privately via GitHub Security Advisories on this repository, or contact the maintainers listed on the POWDER-RANGER org profile.
+## Supported Versions
 
-## Scope notes
+No tagged, maintained release lines. Only the latest commit on the default branch (`main`) is supported. Fixes land on `main` only.
+
+| Version | Supported |
+| --- | --- |
+| `main` (latest commit) | Yes |
+| Anything else | No |
+
+## Reporting a Vulnerability
+
+Do not open a public issue for a suspected vulnerability.
+
+Use GitHub private vulnerability reporting: repository **Security** tab, then **Report a vulnerability**. If that is unavailable, open a public issue titled "Security contact request" with no vulnerability details, and the maintainer will arrange a private channel.
+
+Include: affected script or component and commit, reproduction steps, impact assessment, and any proof-of-concept. Do not include captured traffic, identifiers, or other data belonging to third parties.
+
+## Expected Response Times
+
+Single-maintainer project. Targets, not guarantees:
+
+| Stage | Target |
+| --- | --- |
+| Acknowledgement | 5 business days |
+| Initial triage and severity assessment | 10 business days |
+| Status updates while open | Every 14 days |
+| Fix or mitigation for confirmed issues | Severity-dependent; critical prioritized first |
+
+Default coordinated disclosure window: 90 days from acknowledgement, extendable by agreement.
+
+## Security Maintainer
+
+Curtis Charles Farrar (GitHub: [@POWDER-RANGER](https://github.com/POWDER-RANGER)) is responsible for security review and disclosure handling. There is no separate security team. See the ecosystem-level [MAINTAINERS.md](https://github.com/POWDER-RANGER/CIVWATCH/blob/main/MAINTAINERS.md).
+
+- No bug bounty is offered.
+- Non-security bugs: use public issues.
+
+## Technical Scope and Hardening Notes
 
 - Demo telemetry is synthetic and labeled `demo: true`.
 - ADB collectors read device service dumps on a USB-debuggable handset you control. Do not point them at devices you do not own.
