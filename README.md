@@ -1,35 +1,33 @@
-# CIVWATCH CELL TITAN
+# CIVWATCH Cell Monitor
 
-**Defensive RF observability for [CIVINTELLIGENCE](https://github.com/POWDER-RANGER/CivilianIntelligence).**
+**Defensive cell-network observation for [CIVWATCH](https://github.com/POWDER-RANGER/CivilianIntelligence).** Repository and service name: `civwatch-cell-titan`.
 
-Cell Titan is the specialized RF telemetry and evidence pillar. It supports cellular, Wi-Fi, D2D, and transport-domain observability, demo telemetry, optional ADB sensor collection, live events, and a hash-chained evidence trail.
+Cell Monitor runs on your own computer and observes the phone you connect to it. It records cellular, Wi-Fi, D2D and transport-domain telemetry, supports optional ADB collection, streams live events, and keeps a hash-chained, signed evidence log.
 
-> **Status:** 0.1.2 security baseline; loopback-first and fail-closed production posture.
+> **Status:** 0.1.3 security baseline; loopback-first and fail-closed in production.
+>
+> Cell Monitor reports what a device you control observed. An alert is an observation with a named rule, not proof: it does not by itself establish that a cell-site simulator or other interceptor is present or absent.
 
-## Role in the ecosystem
+## Role in CIVWATCH
 
-**CivilianIntelligence is the system of record.**
+[CivilianIntelligence](https://github.com/POWDER-RANGER/CivilianIntelligence) is the system of record. Cell Monitor owns:
 
-Cell Titan owns:
-
-- sensor and RF telemetry
+- sensor and cell-network telemetry
 - evidence-chain creation and verification
-- optional ADB discovery/capture
+- optional ADB discovery and capture
 - live telemetry streaming
 
-The hub can consume Titan health, telemetry, evidence, and the authenticated user-device observation envelope through a server-side integration rail.
+The CIVWATCH web app reads health, telemetry, evidence and the user-device observation envelope through a server-side integration.
 
-### CIVINT observation contract
+### Observation contract
 
 ```text
 GET /api/observations?n=100&domain=cellular
 ```
 
-The envelope carries an explicit `live`, `demo`, `snapshot`, or `unavailable` state,
-an `owner_scope: user_device` marker, bounded telemetry, evidence records, and
-limitations. It reports observations rather than declaring that an IMSI catcher,
-Stingray, or other specific interceptor was detected. Raw baseband contents are not
-exposed by this API.
+The envelope carries an explicit `live`, `demo`, `snapshot` or `unavailable` state, an `owner_scope: user_device` marker, bounded telemetry, evidence records and limitations. It reports observations rather than declaring that an IMSI catcher or other interceptor was detected. Raw baseband contents are not exposed.
+
+The local page at `http://127.0.0.1:8000` follows **CIVWATCH Design Standard v2** (ops register).
 
 ## Quick start
 
@@ -81,7 +79,7 @@ Bearer checks use constant-time comparison.
 
 ## Network policy
 
-Default bind is loopback. Do **not** expose Titan on open-LAN HTTP.
+Default bind is loopback. Do **not** expose Cell Monitor on open-LAN HTTP.
 
 Remote device access requires:
 
@@ -100,7 +98,7 @@ ADB collection remains disabled unless explicitly enabled.
 
 The registry is intentionally conservative: Android telephony metadata is not raw baseband capture and cannot by itself establish that an interceptor is present or absent. The API is protected by the same local-or-bearer access policy as other non-public operational routes.
 
-## Integration with CIVINTELLIGENCE
+## Integration with the CIVWATCH web app
 
 Configure the hub with:
 
@@ -123,9 +121,9 @@ curl -s 'http://127.0.0.1:8000/api/evidence/tail?n=20'
 ## Related repositories
 
 - [CivilianIntelligence](https://github.com/POWDER-RANGER/CivilianIntelligence) — system of record
-- [Watchtower](https://github.com/POWDER-RANGER/civwatch-watchtower) — geospatial oversight pillar
-- [CIVWATCH v3](https://github.com/POWDER-RANGER/civwatch-v3) — predecessor/reference RF dashboard
-- [CIVWATCH](https://github.com/POWDER-RANGER/CIVWATCH) — legacy migration source
+- [civwatch-watchtower](https://github.com/POWDER-RANGER/civwatch-watchtower) — CIVWATCH Platform services
+- [civwatch-v3](https://github.com/POWDER-RANGER/civwatch-v3) — predecessor RF dashboard
+- [CIVWATCH](https://github.com/POWDER-RANGER/CIVWATCH) — project site and legacy source
 
 ## License
 
@@ -136,11 +134,11 @@ MIT
 
 ## Public platform status — October 2026
 
-**CIVINTELLIGENCE is live on the public web and its REST/API surface is active.**
+**The CIVWATCH web app is live and its REST/API surface is active.**
 
 **Public site:** https://civintelligence.onrender.com
 
-The web platform is now the working reference implementation for the CIVWATCH ecosystem: the core application, public-data surfaces, evidence/provenance model, specialized pillars, and integration boundaries are being exercised through the deployed CIVINTELLIGENCE service.
+The web platform is now the working reference implementation for the CIVWATCH ecosystem: the core application, public-data surfaces, evidence/provenance model, specialized pillars, and integration boundaries are being exercised through the deployed CIVWATCH service.
 
 ### Applications are next
 
@@ -160,12 +158,12 @@ The existing Flutter client and service boundaries give the ecosystem a head sta
 
 The current milestone is notable because the ecosystem moved from a multi-repository architecture and integration plan to a functioning public platform in a short development window. The difficult architectural work — ownership boundaries, public-data ingestion, REST contracts, evidence/provenance rules, Watchtower/Cell Titan integration, and the user-facing desk model — is already substantially established.
 
-That means the next step should be treated as **client delivery on top of an operating platform**. The web application is the reference surface; native clients become additional presentation and interaction layers over the same CIVINTELLIGENCE contracts.
+That means the next step should be treated as **client delivery on top of an operating platform**. The web application is the reference surface; native clients become additional presentation and interaction layers over the same CIVWATCH contracts.
 
 > **Build once at the platform layer. Deliver many clients at the edge.**
 
 ### Ecosystem rule
 
-CIVINTELLIGENCE remains the system of record. Specialized repositories retain clear ownership of their domains, while clients consume stable public/service contracts. Legacy and predecessor repositories remain valuable migration/reference material but are not silently represented as unified production capabilities.
+CIVWATCH remains the system of record. Specialized repositories retain clear ownership of their domains, while clients consume stable public/service contracts. Legacy and predecessor repositories remain valuable migration/reference material but are not silently represented as unified production capabilities.
 
 **Status discipline:** live means exposed and usable; available means implemented and integrated; in progress means actively being built; planned means not yet shipped. No synthetic or unavailable source is represented as live evidence.
