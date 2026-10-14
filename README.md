@@ -90,6 +90,16 @@ Remote device access requires:
 
 ADB collection remains disabled unless explicitly enabled.
 
+## Capability registry
+
+`GET /api/capabilities` returns the machine-readable capability contract. It distinguishes:
+
+- **Device-reported metadata** collected from an explicitly authorized Android device through ADB.
+- **Hardware-dependent RF measurements** that require a separately configured SDR adapter; no SDR result is claimed by default.
+- **Synthetic demo samples** for D2D and transport domains, which must never be presented as physical measurements.
+
+The registry is intentionally conservative: Android telephony metadata is not raw baseband capture and cannot by itself establish that an interceptor is present or absent. The API is protected by the same local-or-bearer access policy as other non-public operational routes.
+
 ## Integration with CIVINTELLIGENCE
 
 Configure the hub with:
