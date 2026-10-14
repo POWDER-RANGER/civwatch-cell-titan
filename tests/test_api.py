@@ -18,7 +18,7 @@ from main import app  # noqa: E402
 def client(tmp_path, monkeypatch):
     monkeypatch.setenv("EVIDENCE_DIR", str(tmp_path / "ev"))
     monkeypatch.setenv("AUTO_DEMO", "false")
-    with TestClient(app) as c:
+    with TestClient(app, base_url="http://127.0.0.1") as c:
         yield c
 
 
