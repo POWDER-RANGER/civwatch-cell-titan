@@ -10,8 +10,11 @@ import pytest
 from fastapi.testclient import TestClient
 
 from main import app
+from titan.adb.devices import device_ref
 
 TOKEN = "capture-test-token"
+# Sensor ids carry a hashed device_ref, never the raw ADB serial (spec §6.3).
+SENSOR_ID = "adb-" + device_ref("FAKE0001")
 
 
 class _Dev:
@@ -49,10 +52,10 @@ def _kinds(client):
 def test_capture_writes_adb_evidence_and_live_samples(client):
     before = _kinds(client).count("telemetry_adb")
     found = client.post("/api/sensors/discover", headers=AUTH).json()["found"]
-    assert [s["id"] for s in found] == ["adb-FAKE0001"]
+    assert [s["id"] for s in found] == [SENSOR_ID]
     assert found[0]["meta"]["model"] == "Pixel 4a"
 
-    r = client.post("/api/sensors/capture", headers=AUTH, json={"sensor_id": "adb-FAKE0001"})
+    r = client.post("/api/sensors/capture", headers=AUTH, json={"sensor_id": SENSOR_ID})
     assert r.status_code == 200 and r.json()["emitted"] == 2
     assert _kinds(client).count("telemetry_adb") == before + 2
 
@@ -63,6 +66,7 @@ def test_capture_writes_adb_evidence_and_live_samples(client):
     assert cell["available"] is True and cell["rsrp_dbm"] == -101 and cell["operator"] == "310260"
     assert wifi["rssi_dbm"] == -58 and wifi["freq_mhz"] == 5180
     assert client.get("/api/evidence/verify", headers=AUTH).json()["ok"] is True
+    assert "FAKE0001" not in r.text and "FAKE0001" not in str(obs)
 
 
 def test_api_submitted_sample_never_writes_adb_evidence(client):

@@ -1,0 +1,1652 @@
+{
+  "schema_version": "1.0",
+  "catalog": "adb-setup",
+  "catalog_version": "1.0.0",
+  "source_classification": "simulation",
+  "description": "Layer A (mocked, deterministic) ADB setup scenarios. Passing proves application logic only.",
+  "scenarios": [
+    {
+      "id": "ADB-001",
+      "name": "ADB missing everywhere (Windows)",
+      "layer": "A",
+      "implemented": true,
+      "spec_ref": "\u00a75 ADB is missing",
+      "initial": {
+        "host": "windows",
+        "adb": {}
+      },
+      "actions": [
+        "check_setup"
+      ],
+      "expect": {
+        "state": "action_required",
+        "code": "adb_missing",
+        "ready": false,
+        "retryable": true,
+        "action": "check_again"
+      },
+      "verification": "No candidate executable \u2192 explicit missing state; never 'ready'.",
+      "evidence": [
+        "diagnosis.state",
+        "diagnosis.code",
+        "diagnosis.devices[].device_ref",
+        "adb.source",
+        "adb.platform_tools"
+      ],
+      "timeout_retry": {
+        "adb_version_timeout_s": 10,
+        "adb_devices_timeout_s": 15,
+        "max_auto_retries": 0,
+        "retry_policy": "user-initiated re-check only; no automatic retries of device operations"
+      }
+    },
+    {
+      "id": "ADB-002",
+      "name": "ADB not on PATH, bundled adb present \u2014 zero user action",
+      "layer": "A",
+      "implemented": true,
+      "spec_ref": "\u00a75 ADB is missing; \u00a72.4 automate safe actions",
+      "initial": {
+        "host": "windows",
+        "adb": {
+          "bundled": {
+            "version_output": "Android Debug Bridge version 1.0.41\nVersion 35.0.2-12147458\nInstalled as /x/adb\n"
+          }
+        },
+        "devices_output": "List of devices attached\n28131FDH2000AB         device usb:1-1 product:panther model:Pixel_7 device:panther transport_id:1\n"
+      },
+      "actions": [
+        "check_setup"
+      ],
+      "expect": {
+        "state": "verifying",
+        "code": "device_connected",
+        "ready": true,
+        "adb_source": "bundled",
+        "device_count": 1
+      },
+      "verification": "Bundled binary verified via `adb version` and used; device reaches 'verifying' without installing anything.",
+      "evidence": [
+        "diagnosis.state",
+        "diagnosis.code",
+        "diagnosis.devices[].device_ref",
+        "adb.source",
+        "adb.platform_tools"
+      ],
+      "timeout_retry": {
+        "adb_version_timeout_s": 10,
+        "adb_devices_timeout_s": 15,
+        "max_auto_retries": 0,
+        "retry_policy": "user-initiated re-check only; no automatic retries of device operations"
+      }
+    },
+    {
+      "id": "ADB-003",
+      "name": "Outdated adb on PATH, current bundled adb preferred",
+      "layer": "A",
+      "implemented": true,
+      "spec_ref": "\u00a75 ADB is outdated",
+      "initial": {
+        "host": "linux",
+        "adb": {
+          "path": {
+            "version_output": "Android Debug Bridge version 1.0.41\nVersion 29.0.6-6198805\nInstalled as /x/adb\n"
+          },
+          "bundled": {
+            "version_output": "Android Debug Bridge version 1.0.41\nVersion 35.0.2-12147458\nInstalled as /x/adb\n"
+          }
+        },
+        "devices_output": "List of devices attached\n28131FDH2000AB         device usb:1-1 product:panther model:Pixel_7 device:panther transport_id:1\n"
+      },
+      "actions": [
+        "check_setup"
+      ],
+      "expect": {
+        "state": "verifying",
+        "adb_source": "bundled",
+        "warnings_exact": [
+          "outdated_adb_skipped"
+        ]
+      },
+      "verification": "Resolver selects platform-tools >= 30 over 29.x and records why.",
+      "evidence": [
+        "diagnosis.state",
+        "diagnosis.code",
+        "diagnosis.devices[].device_ref",
+        "adb.source",
+        "adb.platform_tools"
+      ],
+      "timeout_retry": {
+        "adb_version_timeout_s": 10,
+        "adb_devices_timeout_s": 15,
+        "max_auto_retries": 0,
+        "retry_policy": "user-initiated re-check only; no automatic retries of device operations"
+      }
+    },
+    {
+      "id": "ADB-004",
+      "name": "Only an outdated adb available \u2014 USB still works, flagged",
+      "layer": "A",
+      "implemented": true,
+      "spec_ref": "\u00a75 ADB is outdated",
+      "initial": {
+        "host": "linux",
+        "adb": {
+          "path": {
+            "version_output": "Android Debug Bridge version 1.0.41\nVersion 29.0.6-6198805\nInstalled as /x/adb\n"
+          }
+        },
+        "devices_output": "List of devices attached\n28131FDH2000AB         device usb:1-1 product:panther model:Pixel_7 device:panther transport_id:1\n"
+      },
+      "actions": [
+        "check_setup"
+      ],
+      "expect": {
+        "state": "verifying",
+        "code": "device_connected",
+        "adb_source": "path",
+        "warnings_include": [
+          "adb_outdated"
+        ]
+      },
+      "verification": "Outdated build is usable for USB; warning surfaces for wireless pairing.",
+      "evidence": [
+        "diagnosis.state",
+        "diagnosis.code",
+        "diagnosis.devices[].device_ref",
+        "adb.source",
+        "adb.platform_tools"
+      ],
+      "timeout_retry": {
+        "adb_version_timeout_s": 10,
+        "adb_devices_timeout_s": 15,
+        "max_auto_retries": 0,
+        "retry_policy": "user-initiated re-check only; no automatic retries of device operations"
+      }
+    },
+    {
+      "id": "ADB-005",
+      "name": "Multiple installations with different protocol revisions",
+      "layer": "A",
+      "implemented": true,
+      "spec_ref": "\u00a75 Multiple ADB installations exist",
+      "initial": {
+        "host": "windows",
+        "adb": {
+          "path": {
+            "version_output": "Android Debug Bridge version 1.0.39\nRevision 3db08f2c6889-android\n"
+          },
+          "bundled": {
+            "version_output": "Android Debug Bridge version 1.0.41\nVersion 35.0.2-12147458\nInstalled as /x/adb\n"
+          }
+        },
+        "devices_output": "List of devices attached\n28131FDH2000AB         device usb:1-1 product:panther model:Pixel_7 device:panther transport_id:1\n"
+      },
+      "actions": [
+        "check_setup"
+      ],
+      "expect": {
+        "state": "verifying",
+        "adb_source": "bundled",
+        "warnings_include": [
+          "adb_version_conflict"
+        ]
+      },
+      "verification": "Conflict detected from candidate protocols (1.0.39 vs 1.0.41); current build chosen.",
+      "evidence": [
+        "diagnosis.state",
+        "diagnosis.code",
+        "diagnosis.devices[].device_ref",
+        "adb.source",
+        "adb.platform_tools"
+      ],
+      "timeout_retry": {
+        "adb_version_timeout_s": 10,
+        "adb_devices_timeout_s": 15,
+        "max_auto_retries": 0,
+        "retry_policy": "user-initiated re-check only; no automatic retries of device operations"
+      }
+    },
+    {
+      "id": "ADB-006",
+      "name": "PATH adb broken, bundled adb works",
+      "layer": "A",
+      "implemented": true,
+      "spec_ref": "\u00a75 Multiple ADB installations exist",
+      "initial": {
+        "host": "macos",
+        "adb": {
+          "path": {
+            "returncode": 1,
+            "version_output": "",
+            "stderr": "Segmentation fault"
+          },
+          "bundled": {
+            "version_output": "Android Debug Bridge version 1.0.41\nVersion 35.0.2-12147458\nInstalled as /x/adb\n"
+          }
+        },
+        "devices_output": "List of devices attached\n28131FDH2000AB         device usb:1-1 product:panther model:Pixel_7 device:panther transport_id:1\n"
+      },
+      "actions": [
+        "check_setup"
+      ],
+      "expect": {
+        "state": "verifying",
+        "adb_source": "bundled",
+        "warnings_include": [
+          "preferred_adb_unusable"
+        ]
+      },
+      "verification": "Broken candidate skipped with a recorded warning.",
+      "evidence": [
+        "diagnosis.state",
+        "diagnosis.code",
+        "diagnosis.devices[].device_ref",
+        "adb.source",
+        "adb.platform_tools"
+      ],
+      "timeout_retry": {
+        "adb_version_timeout_s": 10,
+        "adb_devices_timeout_s": 15,
+        "max_auto_retries": 0,
+        "retry_policy": "user-initiated re-check only; no automatic retries of device operations"
+      }
+    },
+    {
+      "id": "ADB-007",
+      "name": "Every adb candidate broken",
+      "layer": "A",
+      "implemented": true,
+      "spec_ref": "\u00a72.5 never fabricate success",
+      "initial": {
+        "host": "windows",
+        "adb": {
+          "path": {
+            "returncode": 1,
+            "version_output": "",
+            "stderr": "Segmentation fault"
+          },
+          "bundled": {
+            "returncode": 1,
+            "version_output": "",
+            "stderr": "Segmentation fault"
+          }
+        }
+      },
+      "actions": [
+        "check_setup"
+      ],
+      "expect": {
+        "state": "action_required",
+        "code": "adb_broken",
+        "ready": false
+      },
+      "verification": "Existing-but-unverifiable executables are 'broken', not 'found'.",
+      "evidence": [
+        "diagnosis.state",
+        "diagnosis.code",
+        "diagnosis.devices[].device_ref",
+        "adb.source",
+        "adb.platform_tools"
+      ],
+      "timeout_retry": {
+        "adb_version_timeout_s": 10,
+        "adb_devices_timeout_s": 15,
+        "max_auto_retries": 0,
+        "retry_policy": "user-initiated re-check only; no automatic retries of device operations"
+      }
+    },
+    {
+      "id": "ADB-008",
+      "name": "adb version check hangs",
+      "layer": "A",
+      "implemented": true,
+      "spec_ref": "\u00a76.4 timeouts",
+      "initial": {
+        "host": "windows",
+        "adb": {
+          "path": {
+            "error": "timeout"
+          }
+        }
+      },
+      "actions": [
+        "check_setup"
+      ],
+      "expect": {
+        "state": "action_required",
+        "code": "adb_broken",
+        "ready": false
+      },
+      "verification": "Version probe timeout \u2192 broken; process does not hang.",
+      "evidence": [
+        "diagnosis.state",
+        "diagnosis.code",
+        "diagnosis.devices[].device_ref",
+        "adb.source",
+        "adb.platform_tools"
+      ],
+      "timeout_retry": {
+        "adb_version_timeout_s": 10,
+        "adb_devices_timeout_s": 15,
+        "max_auto_retries": 0,
+        "retry_policy": "user-initiated re-check only; no automatic retries of device operations"
+      }
+    },
+    {
+      "id": "ADB-009",
+      "name": "Apple Silicon Mac without Platform-Tools",
+      "layer": "A",
+      "implemented": true,
+      "spec_ref": "\u00a74.2 host dimensions",
+      "initial": {
+        "host": "macos",
+        "adb": {}
+      },
+      "actions": [
+        "check_setup"
+      ],
+      "expect": {
+        "state": "action_required",
+        "code": "adb_missing",
+        "message_contains": [
+          "Homebrew"
+        ]
+      },
+      "verification": "macOS guidance names the install path that works on Apple Silicon (no bundled arm64 adb).",
+      "evidence": [
+        "diagnosis.state",
+        "diagnosis.code",
+        "diagnosis.devices[].device_ref",
+        "adb.source",
+        "adb.platform_tools"
+      ],
+      "timeout_retry": {
+        "adb_version_timeout_s": 10,
+        "adb_devices_timeout_s": 15,
+        "max_auto_retries": 0,
+        "retry_policy": "user-initiated re-check only; no automatic retries of device operations"
+      }
+    },
+    {
+      "id": "ADB-010",
+      "name": "ADB server cannot start (port 5037 in use)",
+      "layer": "A",
+      "implemented": true,
+      "spec_ref": "\u00a74.3 ADB server restart",
+      "initial": {
+        "host": "windows",
+        "adb": {
+          "bundled": {
+            "version_output": "Android Debug Bridge version 1.0.41\nVersion 35.0.2-12147458\nInstalled as /x/adb\n"
+          }
+        },
+        "devices_returncode": 1,
+        "devices_stderr": "* daemon not running; starting now at tcp:5037\nerror: could not install *smartsocket* listener: Address already in use\n* failed to start daemon\nerror: cannot connect to daemon\n"
+      },
+      "actions": [
+        "check_setup"
+      ],
+      "expect": {
+        "state": "failed",
+        "code": "adb_server_failed",
+        "retryable": true,
+        "action": "restart_adb"
+      },
+      "verification": "Server start failure classified from stderr; offered restart.",
+      "evidence": [
+        "diagnosis.state",
+        "diagnosis.code",
+        "diagnosis.devices[].device_ref",
+        "adb.source",
+        "adb.platform_tools"
+      ],
+      "timeout_retry": {
+        "adb_version_timeout_s": 10,
+        "adb_devices_timeout_s": 15,
+        "max_auto_retries": 0,
+        "retry_policy": "user-initiated re-check only; no automatic retries of device operations"
+      }
+    },
+    {
+      "id": "ADB-011",
+      "name": "adb devices times out",
+      "layer": "A",
+      "implemented": true,
+      "spec_ref": "\u00a74.3 connection timeouts",
+      "initial": {
+        "host": "linux",
+        "adb": {
+          "bundled": {
+            "version_output": "Android Debug Bridge version 1.0.41\nVersion 35.0.2-12147458\nInstalled as /x/adb\n"
+          }
+        },
+        "devices_timed_out": true
+      },
+      "actions": [
+        "check_setup"
+      ],
+      "expect": {
+        "state": "retrying",
+        "code": "adb_timeout",
+        "ready": false
+      },
+      "verification": "Timeout is its own state; no device list is inferred.",
+      "evidence": [
+        "diagnosis.state",
+        "diagnosis.code",
+        "diagnosis.devices[].device_ref",
+        "adb.source",
+        "adb.platform_tools"
+      ],
+      "timeout_retry": {
+        "adb_version_timeout_s": 10,
+        "adb_devices_timeout_s": 15,
+        "max_auto_retries": 0,
+        "retry_policy": "user-initiated re-check only; no automatic retries of device operations"
+      }
+    },
+    {
+      "id": "ADB-012",
+      "name": "Server restarted due to client/server version mismatch (list still valid)",
+      "layer": "A",
+      "implemented": true,
+      "spec_ref": "\u00a75 Multiple ADB installations exist",
+      "initial": {
+        "host": "windows",
+        "adb": {
+          "bundled": {
+            "version_output": "Android Debug Bridge version 1.0.41\nVersion 35.0.2-12147458\nInstalled as /x/adb\n"
+          }
+        },
+        "devices_output": "List of devices attached\n28131FDH2000AB         device usb:1-1 product:panther model:Pixel_7 device:panther transport_id:1\n",
+        "devices_stderr": "adb server version (39) doesn't match this client (41); killing...\n* daemon started successfully\n"
+      },
+      "actions": [
+        "check_setup"
+      ],
+      "expect": {
+        "state": "verifying",
+        "code": "device_connected",
+        "warnings_include": [
+          "adb_server_restarted"
+        ]
+      },
+      "verification": "Valid list is used; mismatch surfaced as warning.",
+      "evidence": [
+        "diagnosis.state",
+        "diagnosis.code",
+        "diagnosis.devices[].device_ref",
+        "adb.source",
+        "adb.platform_tools"
+      ],
+      "timeout_retry": {
+        "adb_version_timeout_s": 10,
+        "adb_devices_timeout_s": 15,
+        "max_auto_retries": 0,
+        "retry_policy": "user-initiated re-check only; no automatic retries of device operations"
+      }
+    },
+    {
+      "id": "ADB-013",
+      "name": "Version mismatch with no device list",
+      "layer": "A",
+      "implemented": true,
+      "spec_ref": "\u00a75 Multiple ADB installations exist",
+      "initial": {
+        "host": "windows",
+        "adb": {
+          "bundled": {
+            "version_output": "Android Debug Bridge version 1.0.41\nVersion 35.0.2-12147458\nInstalled as /x/adb\n"
+          }
+        },
+        "devices_returncode": 1,
+        "devices_stderr": "adb server version (39) doesn't match this client (41); killing...\nerror: cannot connect to daemon\n"
+      },
+      "actions": [
+        "check_setup"
+      ],
+      "expect": {
+        "state": "action_required",
+        "code": "adb_version_conflict",
+        "action": "restart_adb"
+      },
+      "verification": "Conflict blocks with specific guidance.",
+      "evidence": [
+        "diagnosis.state",
+        "diagnosis.code",
+        "diagnosis.devices[].device_ref",
+        "adb.source",
+        "adb.platform_tools"
+      ],
+      "timeout_retry": {
+        "adb_version_timeout_s": 10,
+        "adb_devices_timeout_s": 15,
+        "max_auto_retries": 0,
+        "retry_policy": "user-initiated re-check only; no automatic retries of device operations"
+      }
+    },
+    {
+      "id": "ADB-014",
+      "name": "Daemon start chatter on stdout",
+      "layer": "A",
+      "implemented": true,
+      "spec_ref": "\u00a76.1 discovery robustness",
+      "initial": {
+        "host": "linux",
+        "adb": {
+          "bundled": {
+            "version_output": "Android Debug Bridge version 1.0.41\nVersion 35.0.2-12147458\nInstalled as /x/adb\n"
+          }
+        },
+        "devices_output": "* daemon not running; starting now at tcp:5037\n* daemon started successfully\nList of devices attached\n28131FDH2000AB         device usb:1-1 product:panther model:Pixel_7 device:panther transport_id:1\n"
+      },
+      "actions": [
+        "check_setup"
+      ],
+      "expect": {
+        "state": "verifying",
+        "device_count": 1
+      },
+      "verification": "Parser ignores daemon lines.",
+      "evidence": [
+        "diagnosis.state",
+        "diagnosis.code",
+        "diagnosis.devices[].device_ref",
+        "adb.source",
+        "adb.platform_tools"
+      ],
+      "timeout_retry": {
+        "adb_version_timeout_s": 10,
+        "adb_devices_timeout_s": 15,
+        "max_auto_retries": 0,
+        "retry_policy": "user-initiated re-check only; no automatic retries of device operations"
+      }
+    },
+    {
+      "id": "ADB-020",
+      "name": "No device detected",
+      "layer": "A",
+      "implemented": true,
+      "spec_ref": "\u00a75 No device is detected",
+      "initial": {
+        "host": "windows",
+        "adb": {
+          "bundled": {
+            "version_output": "Android Debug Bridge version 1.0.41\nVersion 35.0.2-12147458\nInstalled as /x/adb\n"
+          }
+        },
+        "devices_output": "List of devices attached\n"
+      },
+      "actions": [
+        "check_setup"
+      ],
+      "expect": {
+        "state": "action_required",
+        "code": "no_device",
+        "ready": false,
+        "message_contains": [
+          "USB debugging"
+        ]
+      },
+      "verification": "Empty list \u2192 no_device with cable/USB-debugging guidance.",
+      "evidence": [
+        "diagnosis.state",
+        "diagnosis.code",
+        "diagnosis.devices[].device_ref",
+        "adb.source",
+        "adb.platform_tools"
+      ],
+      "timeout_retry": {
+        "adb_version_timeout_s": 10,
+        "adb_devices_timeout_s": 15,
+        "max_auto_retries": 0,
+        "retry_policy": "user-initiated re-check only; no automatic retries of device operations"
+      },
+      "recovery": [
+        {
+          "action": "check_again",
+          "then": {
+            "devices_output": "List of devices attached\n28131FDH2000AB         device usb:1-1 product:panther model:Pixel_7 device:panther transport_id:1\n"
+          },
+          "expect": {
+            "state": "verifying",
+            "code": "device_connected"
+          }
+        }
+      ]
+    },
+    {
+      "id": "ADB-021",
+      "name": "Unauthorized \u2192 user approves \u2192 features verified \u2192 ready",
+      "layer": "A",
+      "implemented": true,
+      "spec_ref": "\u00a75 Device is unauthorized; \u00a77.2",
+      "initial": {
+        "host": "windows",
+        "adb": {
+          "bundled": {
+            "version_output": "Android Debug Bridge version 1.0.41\nVersion 35.0.2-12147458\nInstalled as /x/adb\n"
+          }
+        },
+        "devices_output": "List of devices attached\nR58M42ABCDE            unauthorized usb:1-2 transport_id:2\n"
+      },
+      "actions": [
+        "check_setup"
+      ],
+      "expect": {
+        "state": "awaiting_authorization",
+        "code": "unauthorized",
+        "ready": false,
+        "message_contains": [
+          "approve the debugging prompt",
+          "Try again"
+        ]
+      },
+      "verification": "Exact spec \u00a77.2 message; re-query is the only path forward.",
+      "evidence": [
+        "diagnosis.state",
+        "diagnosis.code",
+        "diagnosis.devices[].device_ref",
+        "adb.source",
+        "adb.platform_tools"
+      ],
+      "timeout_retry": {
+        "adb_version_timeout_s": 10,
+        "adb_devices_timeout_s": 15,
+        "max_auto_retries": 0,
+        "retry_policy": "user-initiated re-check only; no automatic retries of device operations"
+      },
+      "recovery": [
+        {
+          "action": "check_again",
+          "then": {
+            "devices_output": "List of devices attached\nR58M42ABCDE            device usb:1-2 product:a54xnsxx model:SM_A546E device:a54x transport_id:2\n"
+          },
+          "expect": {
+            "state": "verifying",
+            "code": "device_connected",
+            "ready": true
+          }
+        },
+        {
+          "action": "verify_features",
+          "then": {
+            "capability": {
+              "serial": "R58M42ABCDE",
+              "probes": {
+                "cellular": "available",
+                "wifi": "available"
+              }
+            }
+          },
+          "expect": {
+            "state": "ready",
+            "code": "ready",
+            "verified_capabilities": [
+              "cellular",
+              "wifi"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "ADB-022",
+      "name": "Unauthorized, user re-checks without approving",
+      "layer": "A",
+      "implemented": true,
+      "spec_ref": "\u00a77.4 recovery must report whether it fixed the issue",
+      "initial": {
+        "host": "windows",
+        "adb": {
+          "bundled": {
+            "version_output": "Android Debug Bridge version 1.0.41\nVersion 35.0.2-12147458\nInstalled as /x/adb\n"
+          }
+        },
+        "devices_output": "List of devices attached\nR58M42ABCDE            unauthorized usb:1-2 transport_id:2\n"
+      },
+      "actions": [
+        "check_setup"
+      ],
+      "expect": {
+        "state": "awaiting_authorization",
+        "code": "unauthorized"
+      },
+      "verification": "Retry without the human action stays in awaiting_authorization.",
+      "evidence": [
+        "diagnosis.state",
+        "diagnosis.code",
+        "diagnosis.devices[].device_ref",
+        "adb.source",
+        "adb.platform_tools"
+      ],
+      "timeout_retry": {
+        "adb_version_timeout_s": 10,
+        "adb_devices_timeout_s": 15,
+        "max_auto_retries": 0,
+        "retry_policy": "user-initiated re-check only; no automatic retries of device operations"
+      },
+      "recovery": [
+        {
+          "action": "check_again",
+          "then": {},
+          "expect": {
+            "state": "awaiting_authorization",
+            "code": "unauthorized"
+          }
+        }
+      ]
+    },
+    {
+      "id": "ADB-023",
+      "name": "Authorization handshake in progress",
+      "layer": "A",
+      "implemented": true,
+      "spec_ref": "\u00a75 Device is unauthorized",
+      "initial": {
+        "host": "macos",
+        "adb": {
+          "bundled": {
+            "version_output": "Android Debug Bridge version 1.0.41\nVersion 35.0.2-12147458\nInstalled as /x/adb\n"
+          }
+        },
+        "devices_output": "List of devices attached\nR58M42ABCDE            authorizing usb:1-2 transport_id:2\n"
+      },
+      "actions": [
+        "check_setup"
+      ],
+      "expect": {
+        "state": "awaiting_authorization",
+        "code": "authorizing"
+      },
+      "verification": "'authorizing' is distinct from 'unauthorized'.",
+      "evidence": [
+        "diagnosis.state",
+        "diagnosis.code",
+        "diagnosis.devices[].device_ref",
+        "adb.source",
+        "adb.platform_tools"
+      ],
+      "timeout_retry": {
+        "adb_version_timeout_s": 10,
+        "adb_devices_timeout_s": 15,
+        "max_auto_retries": 0,
+        "retry_policy": "user-initiated re-check only; no automatic retries of device operations"
+      }
+    },
+    {
+      "id": "ADB-024",
+      "name": "Device offline \u2192 replug \u2192 connected",
+      "layer": "A",
+      "implemented": true,
+      "spec_ref": "\u00a75 Device is offline",
+      "initial": {
+        "host": "windows",
+        "adb": {
+          "bundled": {
+            "version_output": "Android Debug Bridge version 1.0.41\nVersion 35.0.2-12147458\nInstalled as /x/adb\n"
+          }
+        },
+        "devices_output": "List of devices attached\n28131FDH2000AB         offline usb:1-1 transport_id:1\n"
+      },
+      "actions": [
+        "check_setup"
+      ],
+      "expect": {
+        "state": "retrying",
+        "code": "offline",
+        "retryable": true
+      },
+      "verification": "Offline yields recovery guidance and recovers on re-check.",
+      "evidence": [
+        "diagnosis.state",
+        "diagnosis.code",
+        "diagnosis.devices[].device_ref",
+        "adb.source",
+        "adb.platform_tools"
+      ],
+      "timeout_retry": {
+        "adb_version_timeout_s": 10,
+        "adb_devices_timeout_s": 15,
+        "max_auto_retries": 0,
+        "retry_policy": "user-initiated re-check only; no automatic retries of device operations"
+      },
+      "recovery": [
+        {
+          "action": "check_again",
+          "then": {
+            "devices_output": "List of devices attached\n28131FDH2000AB         device usb:1-1 product:panther model:Pixel_7 device:panther transport_id:1\n"
+          },
+          "expect": {
+            "state": "verifying",
+            "code": "device_connected"
+          }
+        }
+      ]
+    },
+    {
+      "id": "ADB-025",
+      "name": "Linux USB permission (udev) problem",
+      "layer": "A",
+      "implemented": true,
+      "spec_ref": "\u00a75 USB driver or host permission issue",
+      "initial": {
+        "host": "linux",
+        "adb": {
+          "bundled": {
+            "version_output": "Android Debug Bridge version 1.0.41\nVersion 35.0.2-12147458\nInstalled as /x/adb\n"
+          }
+        },
+        "devices_output": "List of devices attached\n28131FDH2000AB         no permissions (missing udev rules? user is in the plugdev group); see [http://developer.android.com/tools/device.html] usb:1-1 transport_id:1\n"
+      },
+      "actions": [
+        "check_setup"
+      ],
+      "expect": {
+        "state": "action_required",
+        "code": "no_permissions",
+        "message_contains": [
+          "plugdev"
+        ]
+      },
+      "verification": "'no permissions' parsed as one state (not 'no'); Linux-specific fix shown.",
+      "evidence": [
+        "diagnosis.state",
+        "diagnosis.code",
+        "diagnosis.devices[].device_ref",
+        "adb.source",
+        "adb.platform_tools"
+      ],
+      "timeout_retry": {
+        "adb_version_timeout_s": 10,
+        "adb_devices_timeout_s": 15,
+        "max_auto_retries": 0,
+        "retry_policy": "user-initiated re-check only; no automatic retries of device operations"
+      }
+    },
+    {
+      "id": "ADB-026",
+      "name": "Windows USB permission/driver problem",
+      "layer": "A",
+      "implemented": true,
+      "spec_ref": "\u00a75 USB driver or host permission issue",
+      "initial": {
+        "host": "windows",
+        "adb": {
+          "bundled": {
+            "version_output": "Android Debug Bridge version 1.0.41\nVersion 35.0.2-12147458\nInstalled as /x/adb\n"
+          }
+        },
+        "devices_output": "List of devices attached\n28131FDH2000AB         no permissions (missing udev rules? user is in the plugdev group); see [http://developer.android.com/tools/device.html] usb:1-1 transport_id:1\n"
+      },
+      "actions": [
+        "check_setup"
+      ],
+      "expect": {
+        "state": "action_required",
+        "code": "no_permissions",
+        "message_contains": [
+          "USB driver"
+        ]
+      },
+      "verification": "Host-specific guidance differs by OS.",
+      "evidence": [
+        "diagnosis.state",
+        "diagnosis.code",
+        "diagnosis.devices[].device_ref",
+        "adb.source",
+        "adb.platform_tools"
+      ],
+      "timeout_retry": {
+        "adb_version_timeout_s": 10,
+        "adb_devices_timeout_s": 15,
+        "max_auto_retries": 0,
+        "retry_policy": "user-initiated re-check only; no automatic retries of device operations"
+      }
+    },
+    {
+      "id": "ADB-027",
+      "name": "Phone in recovery mode",
+      "layer": "A",
+      "implemented": true,
+      "spec_ref": "\u00a74.4 unsupported operations",
+      "initial": {
+        "host": "windows",
+        "adb": {
+          "bundled": {
+            "version_output": "Android Debug Bridge version 1.0.41\nVersion 35.0.2-12147458\nInstalled as /x/adb\n"
+          }
+        },
+        "devices_output": "List of devices attached\n28131FDH2000AB         recovery usb:1-1 product:panther model:Pixel_7 device:panther transport_id:1\n"
+      },
+      "actions": [
+        "check_setup"
+      ],
+      "expect": {
+        "state": "unsupported",
+        "code": "special_mode"
+      },
+      "verification": "Special boot modes are unsupported, not 'connected'.",
+      "evidence": [
+        "diagnosis.state",
+        "diagnosis.code",
+        "diagnosis.devices[].device_ref",
+        "adb.source",
+        "adb.platform_tools"
+      ],
+      "timeout_retry": {
+        "adb_version_timeout_s": 10,
+        "adb_devices_timeout_s": 15,
+        "max_auto_retries": 0,
+        "retry_policy": "user-initiated re-check only; no automatic retries of device operations"
+      }
+    },
+    {
+      "id": "ADB-028",
+      "name": "Unrecognised adb state",
+      "layer": "A",
+      "implemented": true,
+      "spec_ref": "\u00a72.5 unknown is not success",
+      "initial": {
+        "host": "linux",
+        "adb": {
+          "bundled": {
+            "version_output": "Android Debug Bridge version 1.0.41\nVersion 35.0.2-12147458\nInstalled as /x/adb\n"
+          }
+        },
+        "devices_output": "List of devices attached\n28131FDH2000AB         zombie usb:1-1 transport_id:1\n"
+      },
+      "actions": [
+        "check_setup"
+      ],
+      "expect": {
+        "state": "action_required",
+        "code": "unknown_state",
+        "action": "copy_diagnostics"
+      },
+      "verification": "Unknown states map to unknown_state, never device.",
+      "evidence": [
+        "diagnosis.state",
+        "diagnosis.code",
+        "diagnosis.devices[].device_ref",
+        "adb.source",
+        "adb.platform_tools"
+      ],
+      "timeout_retry": {
+        "adb_version_timeout_s": 10,
+        "adb_devices_timeout_s": 15,
+        "max_auto_retries": 0,
+        "retry_policy": "user-initiated re-check only; no automatic retries of device operations"
+      }
+    },
+    {
+      "id": "ADB-030",
+      "name": "Two phones, none selected",
+      "layer": "A",
+      "implemented": true,
+      "spec_ref": "\u00a75 Several devices are connected; \u00a76.2",
+      "initial": {
+        "host": "windows",
+        "adb": {
+          "bundled": {
+            "version_output": "Android Debug Bridge version 1.0.41\nVersion 35.0.2-12147458\nInstalled as /x/adb\n"
+          }
+        },
+        "devices_output": "List of devices attached\n28131FDH2000AB         device usb:1-1 product:panther model:Pixel_7 device:panther transport_id:1\nR58M42ABCDE            device usb:1-2 product:a54xnsxx model:SM_A546E device:a54x transport_id:2\n"
+      },
+      "actions": [
+        "check_setup"
+      ],
+      "expect": {
+        "state": "action_required",
+        "code": "multiple_devices",
+        "ready": true,
+        "device_count": 2
+      },
+      "verification": "No implicit first-device selection.",
+      "evidence": [
+        "diagnosis.state",
+        "diagnosis.code",
+        "diagnosis.devices[].device_ref",
+        "adb.source",
+        "adb.platform_tools"
+      ],
+      "timeout_retry": {
+        "adb_version_timeout_s": 10,
+        "adb_devices_timeout_s": 15,
+        "max_auto_retries": 0,
+        "retry_policy": "user-initiated re-check only; no automatic retries of device operations"
+      }
+    },
+    {
+      "id": "ADB-031",
+      "name": "Two phones, second explicitly selected",
+      "layer": "A",
+      "implemented": true,
+      "spec_ref": "\u00a76.2 device isolation",
+      "initial": {
+        "host": "windows",
+        "adb": {
+          "bundled": {
+            "version_output": "Android Debug Bridge version 1.0.41\nVersion 35.0.2-12147458\nInstalled as /x/adb\n"
+          }
+        },
+        "devices_output": "List of devices attached\n28131FDH2000AB         device usb:1-1 product:panther model:Pixel_7 device:panther transport_id:1\nR58M42ABCDE            device usb:1-2 product:a54xnsxx model:SM_A546E device:a54x transport_id:2\n",
+        "selected_serial": "R58M42ABCDE"
+      },
+      "actions": [
+        "check_setup"
+      ],
+      "expect": {
+        "state": "verifying",
+        "device_ref_of": "R58M42ABCDE"
+      },
+      "verification": "Diagnosis targets exactly the selected device.",
+      "evidence": [
+        "diagnosis.state",
+        "diagnosis.code",
+        "diagnosis.devices[].device_ref",
+        "adb.source",
+        "adb.platform_tools"
+      ],
+      "timeout_retry": {
+        "adb_version_timeout_s": 10,
+        "adb_devices_timeout_s": 15,
+        "max_auto_retries": 0,
+        "retry_policy": "user-initiated re-check only; no automatic retries of device operations"
+      }
+    },
+    {
+      "id": "ADB-032",
+      "name": "Selected phone disconnects while another stays",
+      "layer": "A",
+      "implemented": true,
+      "spec_ref": "\u00a75 Device disconnects mid-operation; \u00a76.2",
+      "initial": {
+        "host": "windows",
+        "adb": {
+          "bundled": {
+            "version_output": "Android Debug Bridge version 1.0.41\nVersion 35.0.2-12147458\nInstalled as /x/adb\n"
+          }
+        },
+        "devices_output": "List of devices attached\n28131FDH2000AB         device usb:1-1 product:panther model:Pixel_7 device:panther transport_id:1\nR58M42ABCDE            device usb:1-2 product:a54xnsxx model:SM_A546E device:a54x transport_id:2\n",
+        "selected_serial": "R58M42ABCDE"
+      },
+      "actions": [
+        "check_setup"
+      ],
+      "expect": {
+        "state": "verifying",
+        "device_ref_of": "R58M42ABCDE"
+      },
+      "verification": "After disconnect Titan does not silently switch to the remaining phone.",
+      "evidence": [
+        "diagnosis.state",
+        "diagnosis.code",
+        "diagnosis.devices[].device_ref",
+        "adb.source",
+        "adb.platform_tools"
+      ],
+      "timeout_retry": {
+        "adb_version_timeout_s": 10,
+        "adb_devices_timeout_s": 15,
+        "max_auto_retries": 0,
+        "retry_policy": "user-initiated re-check only; no automatic retries of device operations"
+      },
+      "recovery": [
+        {
+          "action": "check_again",
+          "then": {
+            "devices_output": "List of devices attached\n28131FDH2000AB         device usb:1-1 product:panther model:Pixel_7 device:panther transport_id:1\n"
+          },
+          "expect": {
+            "state": "action_required",
+            "code": "selected_device_missing"
+          }
+        }
+      ]
+    },
+    {
+      "id": "ADB-033",
+      "name": "Emulator plus physical phone",
+      "layer": "A",
+      "implemented": true,
+      "spec_ref": "\u00a74.3 multiple devices",
+      "initial": {
+        "host": "linux",
+        "adb": {
+          "bundled": {
+            "version_output": "Android Debug Bridge version 1.0.41\nVersion 35.0.2-12147458\nInstalled as /x/adb\n"
+          }
+        },
+        "devices_output": "List of devices attached\nemulator-5554          device product:sdk_gphone64_x86_64 model:sdk_gphone64_x86_64 device:emu64xa transport_id:3\n28131FDH2000AB         device usb:1-1 product:panther model:Pixel_7 device:panther transport_id:1\n"
+      },
+      "actions": [
+        "check_setup"
+      ],
+      "expect": {
+        "state": "action_required",
+        "code": "multiple_devices",
+        "transports": [
+          "emulator",
+          "usb"
+        ]
+      },
+      "verification": "Transport classification distinguishes emulator from USB.",
+      "evidence": [
+        "diagnosis.state",
+        "diagnosis.code",
+        "diagnosis.devices[].device_ref",
+        "adb.source",
+        "adb.platform_tools"
+      ],
+      "timeout_retry": {
+        "adb_version_timeout_s": 10,
+        "adb_devices_timeout_s": 15,
+        "max_auto_retries": 0,
+        "retry_policy": "user-initiated re-check only; no automatic retries of device operations"
+      }
+    },
+    {
+      "id": "ADB-034",
+      "name": "Selected phone authorized, other phone unauthorized",
+      "layer": "A",
+      "implemented": true,
+      "spec_ref": "\u00a76.2 device isolation",
+      "initial": {
+        "host": "windows",
+        "adb": {
+          "bundled": {
+            "version_output": "Android Debug Bridge version 1.0.41\nVersion 35.0.2-12147458\nInstalled as /x/adb\n"
+          }
+        },
+        "devices_output": "List of devices attached\n28131FDH2000AB         device usb:1-1 product:panther model:Pixel_7 device:panther transport_id:1\nR58M42ABCDE            unauthorized usb:1-2 transport_id:2\n",
+        "selected_serial": "28131FDH2000AB"
+      },
+      "actions": [
+        "check_setup"
+      ],
+      "expect": {
+        "state": "verifying",
+        "device_ref_of": "28131FDH2000AB"
+      },
+      "verification": "Another device's authorization state does not block the selected one.",
+      "evidence": [
+        "diagnosis.state",
+        "diagnosis.code",
+        "diagnosis.devices[].device_ref",
+        "adb.source",
+        "adb.platform_tools"
+      ],
+      "timeout_retry": {
+        "adb_version_timeout_s": 10,
+        "adb_devices_timeout_s": 15,
+        "max_auto_retries": 0,
+        "retry_policy": "user-initiated re-check only; no automatic retries of device operations"
+      }
+    },
+    {
+      "id": "ADB-040",
+      "name": "Wireless debugging device (ip:port)",
+      "layer": "A",
+      "implemented": true,
+      "spec_ref": "\u00a74.3 wireless",
+      "initial": {
+        "host": "windows",
+        "adb": {
+          "bundled": {
+            "version_output": "Android Debug Bridge version 1.0.41\nVersion 35.0.2-12147458\nInstalled as /x/adb\n"
+          }
+        },
+        "devices_output": "List of devices attached\n192.168.1.42:41537     device product:panther model:Pixel_7 device:panther transport_id:4\n"
+      },
+      "actions": [
+        "check_setup"
+      ],
+      "expect": {
+        "state": "verifying",
+        "transports": [
+          "wireless"
+        ]
+      },
+      "verification": "Wireless transport recognised.",
+      "evidence": [
+        "diagnosis.state",
+        "diagnosis.code",
+        "diagnosis.devices[].device_ref",
+        "adb.source",
+        "adb.platform_tools"
+      ],
+      "timeout_retry": {
+        "adb_version_timeout_s": 10,
+        "adb_devices_timeout_s": 15,
+        "max_auto_retries": 0,
+        "retry_policy": "user-initiated re-check only; no automatic retries of device operations"
+      }
+    },
+    {
+      "id": "ADB-041",
+      "name": "Wireless debugging device (mDNS service name)",
+      "layer": "A",
+      "implemented": true,
+      "spec_ref": "\u00a74.3 wireless",
+      "initial": {
+        "host": "macos",
+        "adb": {
+          "bundled": {
+            "version_output": "Android Debug Bridge version 1.0.41\nVersion 35.0.2-12147458\nInstalled as /x/adb\n"
+          }
+        },
+        "devices_output": "List of devices attached\nadb-28131FDH2000AB-Xyz12a._adb-tls-connect._tcp device product:panther model:Pixel_7 device:panther transport_id:5\n"
+      },
+      "actions": [
+        "check_setup"
+      ],
+      "expect": {
+        "state": "verifying",
+        "transports": [
+          "wireless"
+        ]
+      },
+      "verification": "mDNS adb-tls-connect serial recognised as wireless.",
+      "evidence": [
+        "diagnosis.state",
+        "diagnosis.code",
+        "diagnosis.devices[].device_ref",
+        "adb.source",
+        "adb.platform_tools"
+      ],
+      "timeout_retry": {
+        "adb_version_timeout_s": 10,
+        "adb_devices_timeout_s": 15,
+        "max_auto_retries": 0,
+        "retry_policy": "user-initiated re-check only; no automatic retries of device operations"
+      }
+    },
+    {
+      "id": "ADB-042",
+      "name": "Wireless connection in progress",
+      "layer": "A",
+      "implemented": true,
+      "spec_ref": "\u00a74.3 wireless",
+      "initial": {
+        "host": "windows",
+        "adb": {
+          "bundled": {
+            "version_output": "Android Debug Bridge version 1.0.41\nVersion 35.0.2-12147458\nInstalled as /x/adb\n"
+          }
+        },
+        "devices_output": "List of devices attached\n192.168.1.42:41537     connecting\n"
+      },
+      "actions": [
+        "check_setup"
+      ],
+      "expect": {
+        "state": "connecting",
+        "code": "connecting"
+      },
+      "verification": "'connecting' is its own state.",
+      "evidence": [
+        "diagnosis.state",
+        "diagnosis.code",
+        "diagnosis.devices[].device_ref",
+        "adb.source",
+        "adb.platform_tools"
+      ],
+      "timeout_retry": {
+        "adb_version_timeout_s": 10,
+        "adb_devices_timeout_s": 15,
+        "max_auto_retries": 0,
+        "retry_policy": "user-initiated re-check only; no automatic retries of device operations"
+      }
+    },
+    {
+      "id": "ADB-050",
+      "name": "Connected but no capability answered",
+      "layer": "A",
+      "implemented": true,
+      "spec_ref": "\u00a75 Feature is unsupported; \u00a72.2",
+      "initial": {
+        "host": "windows",
+        "adb": {
+          "bundled": {
+            "version_output": "Android Debug Bridge version 1.0.41\nVersion 35.0.2-12147458\nInstalled as /x/adb\n"
+          }
+        },
+        "devices_output": "List of devices attached\n28131FDH2000AB         device usb:1-1 product:panther model:Pixel_7 device:panther transport_id:1\n",
+        "capability": {
+          "serial": "28131FDH2000AB",
+          "probes": {
+            "cellular": "unavailable",
+            "wifi": "unavailable"
+          }
+        }
+      },
+      "actions": [
+        "check_setup"
+      ],
+      "expect": {
+        "state": "unsupported",
+        "code": "no_supported_features",
+        "ready": true
+      },
+      "verification": "All-unavailable probes never produce 'ready'.",
+      "evidence": [
+        "diagnosis.state",
+        "diagnosis.code",
+        "diagnosis.devices[].device_ref",
+        "adb.source",
+        "adb.platform_tools"
+      ],
+      "timeout_retry": {
+        "adb_version_timeout_s": 10,
+        "adb_devices_timeout_s": 15,
+        "max_auto_retries": 0,
+        "retry_policy": "user-initiated re-check only; no automatic retries of device operations"
+      }
+    },
+    {
+      "id": "ADB-051",
+      "name": "Partial capability (Wi-Fi only)",
+      "layer": "A",
+      "implemented": true,
+      "spec_ref": "\u00a72.2 expose only verified features",
+      "initial": {
+        "host": "windows",
+        "adb": {
+          "bundled": {
+            "version_output": "Android Debug Bridge version 1.0.41\nVersion 35.0.2-12147458\nInstalled as /x/adb\n"
+          }
+        },
+        "devices_output": "List of devices attached\n28131FDH2000AB         device usb:1-1 product:panther model:Pixel_7 device:panther transport_id:1\n",
+        "capability": {
+          "serial": "28131FDH2000AB",
+          "probes": {
+            "cellular": "unavailable",
+            "wifi": "available"
+          }
+        }
+      },
+      "actions": [
+        "check_setup"
+      ],
+      "expect": {
+        "state": "ready",
+        "verified_capabilities": [
+          "wifi"
+        ]
+      },
+      "verification": "Ready lists exactly the verified capabilities.",
+      "evidence": [
+        "diagnosis.state",
+        "diagnosis.code",
+        "diagnosis.devices[].device_ref",
+        "adb.source",
+        "adb.platform_tools"
+      ],
+      "timeout_retry": {
+        "adb_version_timeout_s": 10,
+        "adb_devices_timeout_s": 15,
+        "max_auto_retries": 0,
+        "retry_policy": "user-initiated re-check only; no automatic retries of device operations"
+      }
+    },
+    {
+      "id": "ADB-052",
+      "name": "Capability proof from a different phone",
+      "layer": "A",
+      "implemented": true,
+      "spec_ref": "\u00a72.5; \u00a76.2",
+      "initial": {
+        "host": "windows",
+        "adb": {
+          "bundled": {
+            "version_output": "Android Debug Bridge version 1.0.41\nVersion 35.0.2-12147458\nInstalled as /x/adb\n"
+          }
+        },
+        "devices_output": "List of devices attached\n28131FDH2000AB         device usb:1-1 product:panther model:Pixel_7 device:panther transport_id:1\nR58M42ABCDE            device usb:1-2 product:a54xnsxx model:SM_A546E device:a54x transport_id:2\n",
+        "selected_serial": "28131FDH2000AB",
+        "capability": {
+          "serial": "R58M42ABCDE",
+          "probes": {
+            "cellular": "available",
+            "wifi": "available"
+          }
+        }
+      },
+      "actions": [
+        "check_setup"
+      ],
+      "expect": {
+        "state": "verifying",
+        "code": "device_connected",
+        "device_ref_of": "28131FDH2000AB"
+      },
+      "verification": "Proof does not transfer between devices.",
+      "evidence": [
+        "diagnosis.state",
+        "diagnosis.code",
+        "diagnosis.devices[].device_ref",
+        "adb.source",
+        "adb.platform_tools"
+      ],
+      "timeout_retry": {
+        "adb_version_timeout_s": 10,
+        "adb_devices_timeout_s": 15,
+        "max_auto_retries": 0,
+        "retry_policy": "user-initiated re-check only; no automatic retries of device operations"
+      }
+    },
+    {
+      "id": "ADB-053",
+      "name": "Probe failed (not merely unavailable)",
+      "layer": "A",
+      "implemented": true,
+      "spec_ref": "\u00a74.4 failed vs unsupported",
+      "initial": {
+        "host": "windows",
+        "adb": {
+          "bundled": {
+            "version_output": "Android Debug Bridge version 1.0.41\nVersion 35.0.2-12147458\nInstalled as /x/adb\n"
+          }
+        },
+        "devices_output": "List of devices attached\n28131FDH2000AB         device usb:1-1 product:panther model:Pixel_7 device:panther transport_id:1\n",
+        "capability": {
+          "serial": "28131FDH2000AB",
+          "probes": {
+            "cellular": "failed",
+            "wifi": "untested"
+          }
+        }
+      },
+      "actions": [
+        "check_setup"
+      ],
+      "expect": {
+        "state": "unsupported",
+        "code": "no_supported_features"
+      },
+      "verification": "Failed/untested probes are not counted as verified.",
+      "evidence": [
+        "diagnosis.state",
+        "diagnosis.code",
+        "diagnosis.devices[].device_ref",
+        "adb.source",
+        "adb.platform_tools"
+      ],
+      "timeout_retry": {
+        "adb_version_timeout_s": 10,
+        "adb_devices_timeout_s": 15,
+        "max_auto_retries": 0,
+        "retry_policy": "user-initiated re-check only; no automatic retries of device operations"
+      }
+    },
+    {
+      "id": "ADB-060",
+      "name": "Phone reboots and comes back",
+      "layer": "A",
+      "implemented": true,
+      "spec_ref": "\u00a75 Device reboots",
+      "initial": {
+        "host": "windows",
+        "adb": {
+          "bundled": {
+            "version_output": "Android Debug Bridge version 1.0.41\nVersion 35.0.2-12147458\nInstalled as /x/adb\n"
+          }
+        },
+        "devices_output": "List of devices attached\n28131FDH2000AB         device usb:1-1 product:panther model:Pixel_7 device:panther transport_id:1\n",
+        "selected_serial": "28131FDH2000AB"
+      },
+      "actions": [
+        "check_setup"
+      ],
+      "expect": {
+        "state": "verifying",
+        "device_ref_of": "28131FDH2000AB"
+      },
+      "verification": "Same device_ref after reboot; no implicit retarget while absent.",
+      "evidence": [
+        "diagnosis.state",
+        "diagnosis.code",
+        "diagnosis.devices[].device_ref",
+        "adb.source",
+        "adb.platform_tools"
+      ],
+      "timeout_retry": {
+        "adb_version_timeout_s": 10,
+        "adb_devices_timeout_s": 15,
+        "max_auto_retries": 0,
+        "retry_policy": "user-initiated re-check only; no automatic retries of device operations"
+      },
+      "recovery": [
+        {
+          "action": "check_again",
+          "then": {
+            "devices_output": "List of devices attached\n"
+          },
+          "expect": {
+            "state": "action_required",
+            "code": "selected_device_missing"
+          }
+        },
+        {
+          "action": "check_again",
+          "then": {
+            "devices_output": "List of devices attached\n28131FDH2000AB         device usb:1-1 product:panther model:Pixel_7 device:panther transport_id:1\n"
+          },
+          "expect": {
+            "state": "verifying",
+            "device_ref_of": "28131FDH2000AB"
+          }
+        }
+      ]
+    },
+    {
+      "id": "ADB-100",
+      "name": "Wireless pairing incomplete",
+      "layer": "A",
+      "implemented": false,
+      "spec_ref": "\u00a75 Wireless pairing is incomplete",
+      "untested_reason": "Titan has no wireless pairing flow (USB-first). Requires feature work before it can be tested."
+    },
+    {
+      "id": "ADB-101",
+      "name": "Companion app installation fails",
+      "layer": "B",
+      "implemented": false,
+      "spec_ref": "\u00a75 Installation fails",
+      "untested_reason": "Not applicable today: Titan installs no on-device app."
+    },
+    {
+      "id": "ADB-102",
+      "name": "Application launch fails",
+      "layer": "B",
+      "implemented": false,
+      "spec_ref": "\u00a75 Application launch fails",
+      "untested_reason": "Not applicable today: Titan launches no on-device app."
+    },
+    {
+      "id": "ADB-103",
+      "name": "Required permission missing",
+      "layer": "B",
+      "implemented": false,
+      "spec_ref": "\u00a75 Required permission is missing",
+      "untested_reason": "No runtime-permission probe exists; collectors run as the adb shell user."
+    },
+    {
+      "id": "ADB-104",
+      "name": "Device disconnects mid-capture",
+      "layer": "A",
+      "implemented": false,
+      "spec_ref": "\u00a75 Device disconnects mid-operation",
+      "untested_reason": "Collector-level behaviour; not a diagnosis scenario.",
+      "covered_by": "tests/test_adb_collectors.py::test_device_gone_is_unavailable_not_live"
+    },
+    {
+      "id": "ADB-105",
+      "name": "Observation request times out",
+      "layer": "A",
+      "implemented": false,
+      "spec_ref": "\u00a75 Observation request times out",
+      "untested_reason": "Collector-level behaviour; not a diagnosis scenario.",
+      "covered_by": "tests/test_adb_collectors.py::test_timeout_is_classified"
+    },
+    {
+      "id": "ADB-106",
+      "name": "Worker crashes",
+      "layer": "B",
+      "implemented": false,
+      "spec_ref": "\u00a75 Worker crashes",
+      "untested_reason": "No worker/queue infrastructure exists yet (Phase 5)."
+    },
+    {
+      "id": "ADB-107",
+      "name": "Host loses connectivity",
+      "layer": "B",
+      "implemented": false,
+      "spec_ref": "\u00a75 Host loses connectivity",
+      "untested_reason": "Requires Layer B harness."
+    },
+    {
+      "id": "ADB-108",
+      "name": "Setup interrupted and resumed",
+      "layer": "B",
+      "implemented": false,
+      "spec_ref": "\u00a75 Setup is interrupted",
+      "untested_reason": "Launcher resume behaviour needs a real-process harness."
+    },
+    {
+      "id": "ADB-109",
+      "name": "Configuration change invalidates results",
+      "layer": "A",
+      "implemented": false,
+      "spec_ref": "\u00a75 Configuration changes",
+      "untested_reason": "No result cache keyed by configuration exists yet."
+    },
+    {
+      "id": "ADB-110",
+      "name": "Concurrent tests compete for resources",
+      "layer": "B",
+      "implemented": false,
+      "spec_ref": "\u00a75 Concurrent tests compete",
+      "untested_reason": "No scheduler exists yet (Phase 5)."
+    },
+    {
+      "id": "ADB-111",
+      "name": "Windows USB driver absent (device invisible to adb)",
+      "layer": "C",
+      "implemented": false,
+      "spec_ref": "\u00a75 USB driver issue",
+      "untested_reason": "Indistinguishable from no_device without OS USB enumeration; needs physical-device validation."
+    },
+    {
+      "id": "ADB-112",
+      "name": "Computer sleep/wake and ADB server restart mid-session",
+      "layer": "B",
+      "implemented": false,
+      "spec_ref": "\u00a74.3",
+      "untested_reason": "Requires a real adb server lifecycle (Layer B)."
+    }
+  ]
+}

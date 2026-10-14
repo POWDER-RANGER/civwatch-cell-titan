@@ -27,6 +27,24 @@ def _utc() -> str:
 
 
 
+ObservationState = Literal["live", "demo", "unavailable"]
+
+
+def observation_state(samples: list[dict[str, Any]]) -> ObservationState:
+    """Envelope state for CIVINTELLIGENCE.
+
+    "live" requires at least one non-synthetic sample that actually carried data.
+    A collector result with ``available: False`` (device gone, timeout, empty dump)
+    is a recorded failure, not a live observation.
+    """
+    real = [s for s in samples if not bool(s.get("metrics", {}).get("demo"))]
+    if any(s.get("metrics", {}).get("available", True) is not False for s in real):
+        return "live"
+    if samples and not real:
+        return "demo"
+    return "unavailable"
+
+
 class SampleBuffer:
     def __init__(self, capacity: int = 500) -> None:
         if capacity < 1 or capacity > 100_000:
