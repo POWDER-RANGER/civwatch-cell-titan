@@ -101,7 +101,10 @@ def bundled_adb_path() -> Optional[str]:
         return None
     import adbutils as _a
 
-    bin_dir = Path(_a.__file__).resolve().parent / "binaries"
+    module_file = getattr(_a, "__file__", None)   # absent on test doubles / namespace packages
+    if not module_file:
+        return None
+    bin_dir = Path(module_file).resolve().parent / "binaries"
     exe = bin_dir / ("adb.exe" if os.name == "nt" else "adb")
     return str(exe) if exe.is_file() else None
 
