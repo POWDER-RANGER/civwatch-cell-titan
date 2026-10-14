@@ -61,6 +61,21 @@ def test_sample_rejects_extra(client):
     assert r.status_code == 422
 
 
+def test_capabilities_distinguish_device_metadata_from_demo(client):
+    response = client.get("/api/capabilities")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["schema_version"] == "1.0"
+    assert body["privacy"]["default_scope"] == "user_device"
+    domains = {item["id"]: item for item in body["domains"]}
+    cellular_modes = {item["id"]: item for item in domains["cellular"]["collection_modes"]}
+    assert cellular_modes["android_adb"]["measurement_class"] == "device_reported_metadata"
+    assert "Does not prove an interceptor is present or absent" in cellular_modes["android_adb"]["limitations"]
+    d2d_modes = domains["d2d"]["collection_modes"]
+    assert d2d_modes[0]["status"] == "demo_only"
+    assert d2d_modes[0]["measurement_class"] == "synthetic"
+
+
 def test_domains_and_sensors(client):
     assert client.get("/api/domains").status_code == 200
     assert client.get("/api/sensors").status_code == 200
