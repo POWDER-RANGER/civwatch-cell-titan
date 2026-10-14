@@ -1,23 +1,12 @@
 """API smoke + contract tests."""
-from pathlib import Path
-
-import os
 import pytest
 from fastapi.testclient import TestClient
 
-os.environ["EVIDENCE_DIR"] = str(Path("/tmp/titan-test-evidence-api"))
-os.environ["AUTO_DEMO"] = "false"
-os.environ["SENSOR_ID"] = "test-sensor"
-os.environ["CELL_TITAN_ENV"] = "development"
-os.environ["ALLOW_UNAUTHENTICATED_LOOPBACK"] = "true"
-
-from main import app  # noqa: E402
+from main import app
 
 
 @pytest.fixture
-def client(tmp_path, monkeypatch):
-    monkeypatch.setenv("EVIDENCE_DIR", str(tmp_path / "ev"))
-    monkeypatch.setenv("AUTO_DEMO", "false")
+def client():
     with TestClient(app, base_url="http://127.0.0.1") as c:
         yield c
 

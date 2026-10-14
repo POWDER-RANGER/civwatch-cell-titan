@@ -1,3 +1,3 @@
 """CIVWATCH CELL TITAN — defensive RF observability."""
 
-__version__ = "0.1.2"
+__version__ = "0.1.3"

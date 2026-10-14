@@ -1,30 +1,22 @@
-import os
-from pathlib import Path
-
+"""Bearer-auth boundary with REQUIRE_AUTH=true and a configured token."""
 import pytest
 from fastapi.testclient import TestClient
 
-os.environ["EVIDENCE_DIR"] = str(Path("/tmp/titan-auth-ev"))
-os.environ["AUTO_DEMO"] = "false"
-os.environ["SENSOR_ID"] = "auth-test"
-os.environ["CELL_TITAN_ENV"] = "development"
-os.environ["TITAN_API_TOKEN"] = "test-secret-token-xyz"
-os.environ["REQUIRE_AUTH"] = "true"
-os.environ["ADB_ENABLED"] = "false"
-os.environ["ALLOW_UNAUTHENTICATED_LOOPBACK"] = "false"
+from main import app
 
-import importlib
-import titan.config as cfg
-
-importlib.reload(cfg)
-import main as main_mod
-
-importlib.reload(main_mod)
+TOKEN = "test-secret-token-xyz"
 
 
 @pytest.fixture
-def client():
-    with TestClient(main_mod.app) as c:
+def client(titan_env):
+    titan_env(
+        TITAN_API_TOKEN=TOKEN,
+        REQUIRE_AUTH="true",
+        ADB_ENABLED="false",
+        ALLOW_UNAUTHENTICATED_LOOPBACK="false",
+        SENSOR_ID="auth-test",
+    )
+    with TestClient(app) as c:
         yield c
 
 
@@ -41,7 +33,7 @@ def test_write_with_token(client):
     r = client.post(
         "/api/telemetry/sample",
         json={"domain": "cellular", "metrics": {"rat": "LTE"}},
-        headers={"Authorization": "Bearer test-secret-token-xyz"},
+        headers={"Authorization": f"Bearer {TOKEN}"},
     )
     assert r.status_code == 200
 
@@ -56,9 +48,13 @@ def test_bad_token_rejected(client):
 
 
 def test_adb_disabled(client):
-    r = client.post(
-        "/api/sensors/discover",
-        headers={"Authorization": "Bearer test-secret-token-xyz"},
-    )
+    r = client.post("/api/sensors/discover", headers={"Authorization": f"Bearer {TOKEN}"})
     assert r.status_code == 403
     assert "adb_disabled" in r.json()["detail"]
+
+
+def test_observations_require_token_off_loopback_config(client):
+    assert client.get("/api/observations").status_code == 401
+    r = client.get("/api/observations", headers={"Authorization": f"Bearer {TOKEN}"})
+    assert r.status_code == 200
+    assert r.json()["schema_version"] == "1.0"

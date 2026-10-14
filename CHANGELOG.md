@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.1.3 — green CI + deploy verification (2026-10-13)
+
+- Fix: `titan.config.settings` now reloads **in place**. Tests previously used
+  `importlib.reload(titan.config)`, creating a second settings object; auth checks
+  read the new object while `main` held the old one, and module-level env writes
+  leaked across test files at collection time. Result: 10 order-dependent failures
+  and red CI on `main` since 2026-10-05, which blocked Render deploys.
+- Tests: per-test environment isolation (`conftest.py` autouse fixture + `titan_env`);
+  suite passes in any order. New regression guard and anonymous-vs-token test for
+  `/api/observations`.
+- CI: asserts production refuses to boot without a token, then boots the production
+  configuration and runs the deploy smoke check.
+- New `scripts/smoke_deploy.py`: stdlib post-deploy validator with Render cold-start
+  tolerance and `--expect-version` to prove which build is live.
+- New `scripts/device_acceptance.py`: physical-device acceptance against a local Titan.
+  Requires a `telemetry_adb` evidence record, which only the ADB capture route writes,
+  so API-submitted samples cannot pass. Writes a redacted per-device field report.
+- Tests: ADB discover + capture through the real routes with an `adbutils` test double.
+- Docs: `docs/PHASE1_VALIDATION.md` operational validation runbook; README citation
+  artifact replaced with a real link.
+- Includes the capability registry and observation envelope merged in PR #9.
+
 ## 0.1.2 — auth boundary (2026-10-03)
 
 - Bearer token on write + ADB routes; `hmac.compare_digest` with length guard
