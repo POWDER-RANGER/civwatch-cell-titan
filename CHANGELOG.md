@@ -14,6 +14,12 @@
   configuration and runs the deploy smoke check.
 - New `scripts/smoke_deploy.py`: stdlib post-deploy validator with Render cold-start
   tolerance and `--expect-version` to prove which build is live.
+- New `scripts/device_acceptance.py`: physical-device acceptance against a local Titan.
+  Requires a `telemetry_adb` evidence record, which only the ADB capture route writes,
+  so API-submitted samples cannot pass. Writes a redacted per-device field report.
+- Tests: ADB discover + capture through the real routes with an `adbutils` test double.
+- Docs: `docs/PHASE1_VALIDATION.md` operational validation runbook; README citation
+  artifact replaced with a real link.
 - Includes the capability registry and observation envelope merged in PR #9.
 
 ## 0.1.2 — auth boundary (2026-10-03)

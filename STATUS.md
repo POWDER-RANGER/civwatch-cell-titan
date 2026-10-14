@@ -13,8 +13,9 @@
 - [x] Remote telemetry/evidence reads require bearer auth; loopback development remains available when explicitly enabled
 - [x] `GET /api/capabilities` — hardware-bounded capability registry (schema 1.0)
 - [x] `GET /api/observations` — bounded CIVINTELLIGENCE observation envelope (schema 1.0)
-- [x] Test suite isolated per test (37 passing, order-independent)
+- [x] Test suite isolated per test (40 passing, order-independent)
 - [x] CI boots the production configuration and runs `scripts/smoke_deploy.py`
+- [x] `scripts/device_acceptance.py` — physical-device acceptance that API-injected samples cannot satisfy
 
 ## Phase gate — "operational and validated"
 

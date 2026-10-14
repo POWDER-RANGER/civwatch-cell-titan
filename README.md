@@ -43,7 +43,7 @@ The launcher creates a private Python virtual environment, installs Titan's pinn
 
 If Android is connected but still shows `unauthorized`, unlock the device and accept the RSA prompt, then click **Check ADB** followed by **Discover ADB**.
 
-Android's official documentation confirms that ADB is part of Android SDK Platform Tools and that USB debugging plus explicit RSA authorization are required for an attached device to appear as an authorized `device`. citeturn770267search2turn770267search3
+Android's official documentation confirms that ADB is part of Android SDK Platform Tools and that USB debugging plus explicit RSA authorization are required for an attached device to appear as an authorized `device`. See [Android Debug Bridge](https://developer.android.com/tools/adb).
 
 ### Manual start
 
