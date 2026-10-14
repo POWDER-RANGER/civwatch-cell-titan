@@ -1,6 +1,6 @@
 [project]
 name = "civwatch-cell-titan"
-version = "0.1.0"
+version = "0.1.3"
 description = "CIVWATCH CELL TITAN — defensive RF observability for CIVINTELLIGENCE"
 readme = "README.md"
 requires-python = ">=3.11"

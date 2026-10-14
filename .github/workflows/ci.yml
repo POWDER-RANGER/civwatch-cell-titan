@@ -26,3 +26,27 @@ jobs:
         run: python -m pytest -q --tb=short
       - name: Import check
         run: python -c "from main import app; from titan.evidence import EvidenceChain"
+      - name: Production refuses to boot without token
+        env:
+          CELL_TITAN_ENV: production
+          REQUIRE_AUTH: "true"
+          TITAN_API_TOKEN: ""
+          EVIDENCE_DIR: /tmp/civwatch-evidence-noboot
+        run: |
+          if timeout 10 uvicorn main:app --port 8001 > noboot.log 2>&1; then
+            echo "::error::server started without TITAN_API_TOKEN"; exit 1
+          fi
+          grep -q "refuse-to-start" noboot.log
+      - name: Production boot smoke
+        env:
+          CELL_TITAN_ENV: production
+          REQUIRE_AUTH: "true"
+          TITAN_API_TOKEN: ci-smoke-token-not-a-secret
+          ADB_ENABLED: "false"
+          CORS_ORIGINS: ""
+          EVIDENCE_DIR: /tmp/civwatch-evidence-smoke
+        run: |
+          uvicorn main:app --host 127.0.0.1 --port 8000 > uvicorn.log 2>&1 &
+          VERSION=$(python -c "from titan import __version__; print(__version__)")
+          python scripts/smoke_deploy.py http://127.0.0.1:8000 --expect-version "$VERSION" --wake-timeout 30 \
+            || { cat uvicorn.log; exit 1; }
