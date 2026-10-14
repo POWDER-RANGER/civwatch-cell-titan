@@ -59,11 +59,11 @@ def ensure_python() -> None:
         return
     found = None if os.environ.get("TITAN_SETUP_REEXEC") else _find_supported_python()
     if found:
-        print(f"Python {platform.python_version()} is too new/old for Titan; switching to {found}.")
+        print(f"Python {platform.python_version()} is too new/old for Cell Monitor; switching to {found}.")
         env = {**os.environ, "TITAN_SETUP_REEXEC": "1"}
         raise SystemExit(subprocess.call([found, str(Path(__file__).resolve()), *sys.argv[1:]], env=env))
     fail(
-        f"Titan needs Python 3.11, 3.12 or 3.13, but this computer is running Python {platform.python_version()}.\n"
+        f"Cell Monitor needs Python 3.11, 3.12 or 3.13, but this computer is running Python {platform.python_version()}.\n"
         "Install Python 3.13 from https://www.python.org/downloads/ (you can keep your current version), "
         "then run START-TITAN again."
     )
@@ -78,21 +78,21 @@ def _requirements_digest() -> str:
 def ensure_venv() -> None:
     try:
         if not pyexe().exists():
-            print("Setting up Titan's private environment (first run only)…")
+            print("Setting up Cell Monitor's private environment (first run only)…")
             subprocess.run([sys.executable, "-m", "venv", str(VENV)], cwd=ROOT, check=True)
         digest = _requirements_digest()
         if STAMP.exists() and STAMP.read_text(encoding="utf-8").strip() == digest:
             return   # unchanged: no network needed, so offline relaunches work
-        print("Installing Titan's components…")
+        print("Installing Cell Monitor's components…")
         subprocess.run([str(pyexe()), "-m", "pip", "install", "-r", "requirements.txt", "-q",
                         "--disable-pip-version-check"], cwd=ROOT, check=True)
         STAMP.write_text(digest, encoding="utf-8")
     except subprocess.CalledProcessError:
-        fail("Titan couldn't download its components. Check your internet connection and run START-TITAN again.\n"
+        fail("Cell Monitor couldn't download its components. Check your internet connection and run START-TITAN again.\n"
              "(If you're behind a work or school network, it may block Python downloads.)")
     except OSError as ex:
-        fail(f"Titan couldn't create its private environment ({type(ex).__name__}). "
-             "Move the Titan folder somewhere you can write to (for example your Documents folder) and try again.")
+        fail(f"Cell Monitor couldn't create its private environment ({type(ex).__name__}). "
+             "Move the Cell Monitor folder somewhere you can write to (for example your Documents folder) and try again.")
 
 
 def ensure_env() -> None:
@@ -117,7 +117,7 @@ def ensure_env() -> None:
     else:
         lines.append(new)
     ENV.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    print("Repaired Titan's local settings (added the missing local security key).")
+    print("Repaired Cell Monitor's local settings (added the missing local security key).")
 
 
 def ensure_adb() -> bool:
@@ -137,8 +137,8 @@ def ensure_adb() -> bool:
 
 def main() -> None:
     ensure_python()
-    print("CELL TITAN — one-click local setup")
-    print("Titan stays on this computer (127.0.0.1) and only reads phones you connect and approve.")
+    print("CIVWATCH Cell Monitor — one-click local setup")
+    print("Cell Monitor stays on this computer (127.0.0.1) and only reads phones you connect and approve.")
     ensure_venv()
     ensure_env()
     try:
@@ -146,7 +146,7 @@ def main() -> None:
     except subprocess.TimeoutExpired:
         phone_ready = False
     if not phone_ready:
-        print("\nTitan will open anyway — follow the steps on the page, then select Check ADB.")
+        print("\nCell Monitor will open anyway — follow the steps on the page, then select Check ADB.")
     os.environ.update({
         "HOST": "127.0.0.1", "PORT": "8000", "CELL_TITAN_ENV": "development",
         "ALLOW_UNAUTHENTICATED_LOOPBACK": "true", "ADB_ENABLED": "true", "REQUIRE_AUTH": "false",

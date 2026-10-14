@@ -1,4 +1,4 @@
-"""CIVWATCH CELL TITAN - hardened public operational release."""
+"""CIVWATCH Cell Monitor (repository: civwatch-cell-titan) - hardened public release."""
 from __future__ import annotations
 
 import asyncio
@@ -53,8 +53,8 @@ async def lifespan(_app: FastAPI):
 
 
 app = FastAPI(
-    title="CIVWATCH CELL TITAN",
-    description="Defensive RF observability for CIVINTELLIGENCE.",
+    title="CIVWATCH Cell Monitor",
+    description="Defensive cell-network observation for CIVWATCH. Reports observations from devices you control; it does not by itself establish interception.",
     version=__version__,
     lifespan=lifespan,
     contact={"name": "POWDER-RANGER / CIVWATCH", "url": "https://github.com/POWDER-RANGER/civwatch-cell-titan"},
@@ -428,9 +428,9 @@ def evidence_tail(n: int = Query(20, ge=1, le=200)) -> dict[str, Any]:
 @app.get("/api/status", dependencies=[Depends(require_local_or_bearer)])
 def status() -> dict[str, Any]:
     return {
-        "platform": "CIVWATCH CELL TITAN",
+        "platform": "CIVWATCH Cell Monitor",
         "version": __version__,
-        "role": "Defensive RF observability pillar of CIVINTELLIGENCE",
+        "role": "Defensive cell-network observation for CIVWATCH",
         "upstream": "https://github.com/POWDER-RANGER/CivilianIntelligence",
         "release": "public",
         "assurance": "hash-chain+strict-schema+rate-limit+bearer-auth",
@@ -496,7 +496,7 @@ def index() -> Any:
     index_path = STATIC / "index.html"
     if index_path.exists():
         return FileResponse(index_path)
-    return HTMLResponse("<h1>CELL TITAN</h1><p>API up. See <a href='/docs'>/docs</a>.</p>")
+    return HTMLResponse("<h1>CIVWATCH Cell Monitor</h1><p>API up. See <a href='/docs'>/docs</a>.</p>")
 
 
 if __name__ == "__main__":

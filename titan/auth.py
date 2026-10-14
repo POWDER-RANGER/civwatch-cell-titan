@@ -137,6 +137,6 @@ def assert_boot_auth() -> None:
 
     if (settings.require_auth or settings.env == "production") and not settings.api_token:
         raise RuntimeError(
-            "CELL TITAN refuse-to-start: CELL_TITAN_ENV=production or REQUIRE_AUTH=true "
+            "Cell Monitor refuse-to-start: CELL_TITAN_ENV=production or REQUIRE_AUTH=true "
             "requires TITAN_API_TOKEN to be set"
         )
