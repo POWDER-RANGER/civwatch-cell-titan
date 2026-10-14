@@ -3,8 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import json
-import shutil
-import subprocess
+import os
 import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -16,6 +15,9 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from titan import __version__
+from titan.adb.diagnosis import CapabilityResult, check_setup, diagnose, host_os
+from titan.adb.locate import AdbResolution, resolve_adb_cached
+from titan.adb.messages import message_for_collector_error
 from titan.adb_collect import collect_cellular, collect_wifi
 from titan.auth import LOCAL_SESSION_COOKIE, assert_boot_auth, is_loopback, local_session_token, require_adb_enabled, require_bearer, require_local_or_bearer, require_privileged, tokens_equal
 from titan.config import settings
@@ -25,7 +27,7 @@ from titan.live import hub
 from titan.middleware import BodySizeLimitMiddleware, RateLimitMiddleware, SecurityHeadersMiddleware
 from titan.schemas.api import CaptureIn, SampleIn
 from titan.sensors import SensorRegistry
-from titan.telemetry import Domain, RfSample, SampleBuffer, _utc
+from titan.telemetry import Domain, RfSample, SampleBuffer, _utc, observation_state
 
 DOMAINS: tuple[Domain, ...] = ("cellular", "wifi", "d2d", "transport")
 
@@ -110,30 +112,37 @@ def setup_session(request: Request, response: Response) -> dict[str, Any]:
     }
 
 
+def _resolve_adb() -> AdbResolution:
+    """One verified adb for the whole process; adbutils is pinned to the same binary."""
+    res = resolve_adb_cached()
+    if res.available and res.path and not os.environ.get("ADBUTILS_ADB_PATH"):
+        os.environ["ADBUTILS_ADB_PATH"] = res.path
+    return res
+
+
 @app.get("/api/setup/check")
-def setup_check(request: Request) -> dict[str, Any]:
+def setup_check(
+    request: Request,
+    device: str | None = Query(None, pattern=r"^dev-[0-9a-f]{12}$"),
+) -> dict[str, Any]:
     if settings.env == "production" or not is_loopback(request):
         raise HTTPException(status_code=404, detail="local_setup_only")
-    adb = shutil.which("adb")
-    devices: list[dict[str, Any]] = []
-    if adb:
-        try:
-            p = subprocess.run([adb, "devices", "-l"], capture_output=True, text=True, timeout=8, check=False)
-            for line in p.stdout.splitlines():
-                line = line.strip()
-                if not line or line.startswith("List of devices attached"):
-                    continue
-                parts = line.split()
-                if len(parts) >= 2:
-                    devices.append({"serial": parts[0], "state": parts[1], "details": parts[2:]})
-        except Exception as ex:
-            devices.append({"error": str(ex)})
+    resolution = _resolve_adb()
+    diag, devices = check_setup(resolution, host=host_os(), selected_ref=device)
     return {
         "python": sys.version.split()[0],
-        "adb": {"available": bool(adb), "path": adb, "devices": devices},
+        "adb": {
+            "available": resolution.available,
+            "path": resolution.path,
+            "source": resolution.source,
+            "platform_tools": resolution.platform_tools,
+            "warnings": resolution.warnings,
+            "devices": [d.local() for d in devices],
+        },
         "adb_enabled": settings.adb_enabled,
-        "ready": bool(adb) and any(d.get("state") == "device" for d in devices if isinstance(d, dict)),
-        "next": "unlock_device_and_accept_usb_debugging" if any(d.get("state") == "unauthorized" for d in devices if isinstance(d, dict)) else None,
+        "ready": diag.ready,
+        "next": "unlock_device_and_accept_usb_debugging" if diag.code in ("unauthorized", "authorizing") else None,
+        "setup": diag.to_dict(),
     }
 
 
@@ -149,10 +158,17 @@ def list_sensors() -> dict[str, Any]:
 
 @app.post("/api/sensors/discover", dependencies=[Depends(require_privileged), Depends(require_adb_enabled)])
 async def discover_sensors() -> dict[str, Any]:
-    found = registry.discover_adb()
-    rec = chain.append("sensor_discover", {"found": len(found), "items": found})
-    await hub.publish({"type": "sensors", "found": found, "evidence_seq": rec.seq})
-    return {"found": found, "evidence_seq": rec.seq, "evidence_hash": rec.hash}
+    await asyncio.to_thread(_resolve_adb)
+    result = await asyncio.to_thread(registry.discover)
+    rec = chain.append(
+        "sensor_discover",
+        {"found": len(result.found), "items": result.found, "error": result.error},
+    )
+    await hub.publish({"type": "sensors", "found": result.found, "evidence_seq": rec.seq})
+    out: dict[str, Any] = {"found": result.found, "evidence_seq": rec.seq, "evidence_hash": rec.hash}
+    if result.error:
+        out["error"] = message_for_collector_error(result.error["code"], host_os())
+    return out
 
 
 @app.post("/api/sensors/capture", dependencies=[Depends(require_privileged), Depends(require_adb_enabled)])
@@ -163,10 +179,23 @@ async def capture_adb(body: CaptureIn) -> Any:
             status_code=404,
             content={"error": "adb_sensor_not_found", "hint": "POST /api/sensors/discover first"},
         )
-    serial = str(sensor.meta.get("serial") or body.sensor_id.replace("adb-", "", 1))
+    serial = str(sensor.meta.get("serial") or "")
+    if not serial:
+        # Never derive a target from the request; only a discovered record may name a device.
+        return JSONResponse(status_code=404, content={"error": "adb_sensor_not_found"})
+    await asyncio.to_thread(_resolve_adb)
     emitted = []
+    probes: dict[str, str] = {}
+    errors: list[str] = []
     for domain in body.domains:
-        metrics = collect_cellular(serial) if domain == "cellular" else collect_wifi(serial)
+        collector = collect_cellular if domain == "cellular" else collect_wifi
+        metrics = await asyncio.to_thread(collector, serial)  # blocking adb I/O off the event loop
+        if metrics.get("available"):
+            probes[domain] = "available"
+        else:
+            category = str(metrics.get("error_category") or "empty_output")
+            probes[domain] = "unavailable" if category == "empty_output" else "failed"
+            errors.append(category)
         sample = RfSample(domain=domain, sensor_id=body.sensor_id, ts=_utc(), metrics=metrics)
         buffer.push(sample)
         rec = chain.append(
@@ -182,7 +211,22 @@ async def capture_adb(body: CaptureIn) -> Any:
         await hub.publish(event)
         emitted.append(event)
     registry.touch(body.sensor_id)
-    return {"emitted": len(emitted), "items": emitted}
+    ref = str(sensor.meta.get("device_ref") or "")
+    resolution = await asyncio.to_thread(_resolve_adb)
+    diag, devices = await asyncio.to_thread(check_setup, resolution, host=host_os(), selected_ref=ref or None)
+    if diag.state == "verifying":
+        diag = diagnose(resolution, devices, host=host_os(), selected_ref=ref,
+                        capability=CapabilityResult(device_ref=ref, probes=probes))  # type: ignore[arg-type]
+    out: dict[str, Any] = {
+        "emitted": len(emitted),
+        "available": sum(1 for v in probes.values() if v == "available"),
+        "capability": {"device_ref": ref, "probes": probes},
+        "items": emitted,
+        "setup": diag.to_dict(),
+    }
+    if errors and not out["available"]:
+        out["error"] = message_for_collector_error(errors[0], host_os())
+    return out
 
 
 @app.get("/api/capabilities", dependencies=[Depends(require_local_or_bearer)])
@@ -328,12 +372,7 @@ def user_observations(
 ) -> dict[str, Any]:
     """Bounded, privacy-scoped envelope for CIVINTELLIGENCE integration."""
     samples = buffer.recent(n, domain)
-    if not samples:
-        state = "unavailable"
-    elif all(bool(item.get("metrics", {}).get("demo")) for item in samples):
-        state = "demo"
-    else:
-        state = "live"
+    state = observation_state(samples)
     records = chain.tail(min(n, 100))
     evidence = [
         {
