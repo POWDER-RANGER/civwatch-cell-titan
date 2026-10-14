@@ -185,6 +185,87 @@ async def capture_adb(body: CaptureIn) -> Any:
     return {"emitted": len(emitted), "items": emitted}
 
 
+@app.get("/api/capabilities", dependencies=[Depends(require_local_or_bearer)])
+def capabilities() -> dict[str, Any]:
+    """Describe verified collection paths separately from demo/reference concepts."""
+    return {
+        "schema_version": "1.0",
+        "service": "cell-titan",
+        "principle": "capability claims are bounded by the attached hardware and collector",
+        "domains": [
+            {
+                "id": "cellular",
+                "label": "Cellular",
+                "collection_modes": [
+                    {
+                        "id": "android_adb",
+                        "status": "available_when_authorized_device_attached",
+                        "method": "Android telephony/system metadata via ADB",
+                        "measurement_class": "device_reported_metadata",
+                        "limitations": [
+                            "Not raw baseband or spectrum capture",
+                            "Does not prove an interceptor is present or absent",
+                            "Fields vary by Android version, modem, carrier, and permissions",
+                        ],
+                    },
+                    {
+                        "id": "external_sdr",
+                        "status": "not_builtin",
+                        "method": "Requires a separately configured compatible SDR adapter",
+                        "measurement_class": "hardware_dependent_rf_measurement",
+                        "limitations": ["No SDR measurement is claimed unless an adapter is configured and data is observed"],
+                    },
+                ],
+            },
+            {
+                "id": "wifi",
+                "label": "Wi-Fi",
+                "collection_modes": [
+                    {
+                        "id": "android_adb",
+                        "status": "available_when_authorized_device_attached",
+                        "method": "Android system-reported Wi-Fi metadata via ADB",
+                        "measurement_class": "device_reported_metadata",
+                        "limitations": ["Not monitor-mode packet capture", "Visibility is constrained by OS permissions and device support"],
+                    }
+                ],
+            },
+            {
+                "id": "d2d",
+                "label": "Device-to-device",
+                "collection_modes": [
+                    {
+                        "id": "synthetic_demo",
+                        "status": "demo_only",
+                        "method": "Synthetic sample generator",
+                        "measurement_class": "synthetic",
+                        "limitations": ["Not a physical sidelink measurement"],
+                    }
+                ],
+            },
+            {
+                "id": "transport",
+                "label": "Bluetooth / BLE / NFC",
+                "collection_modes": [
+                    {
+                        "id": "synthetic_demo",
+                        "status": "demo_only",
+                        "method": "Synthetic sample generator",
+                        "measurement_class": "synthetic",
+                        "limitations": ["Not a physical transport-radio measurement"],
+                    }
+                ],
+            },
+        ],
+        "privacy": {
+            "default_scope": "user_device",
+            "remote_device_discovery": False,
+            "raw_baseband_export": False,
+            "collect_only_owned_or_authorized_devices": True,
+        },
+    }
+
+
 @app.get("/api/domains", dependencies=[Depends(require_local_or_bearer)])
 def list_domains() -> dict[str, Any]:
     return {
@@ -239,6 +320,53 @@ async def ingest_demo(count: int = Query(1, ge=1, le=100)) -> dict[str, Any]:
         await hub.publish(event)
         emitted.append(event)
     return {"emitted": len(emitted), "items": emitted, "state": "demo"}
+
+@app.get("/api/observations", dependencies=[Depends(require_local_or_bearer)])
+def user_observations(
+    n: int = Query(100, ge=1, le=500),
+    domain: Domain | None = None,
+) -> dict[str, Any]:
+    """Bounded, privacy-scoped envelope for CIVINTELLIGENCE integration."""
+    samples = buffer.recent(n, domain)
+    if not samples:
+        state = "unavailable"
+    elif all(bool(item.get("metrics", {}).get("demo")) for item in samples):
+        state = "demo"
+    else:
+        state = "live"
+    records = chain.tail(min(n, 100))
+    evidence = [
+        {
+            "seq": item.get("seq"),
+            "ts": item.get("ts"),
+            "kind": item.get("kind"),
+            "hash": item.get("hash"),
+        }
+        for item in records
+    ]
+    limitations = [
+        "Android system metadata is not raw baseband or spectrum capture",
+        "Observations do not by themselves prove interception or malicious activity",
+        "Available fields depend on device, Android version, modem, carrier, and permissions",
+        "No server-side discovery of remote devices is performed by this endpoint",
+    ]
+    return {
+        "schema_version": "1.0",
+        "service": "cell-titan",
+        "state": state,
+        "owner_scope": "user_device",
+        "generated_at": _utc(),
+        "samples": samples,
+        "evidence": evidence,
+        "evidence_verification": cached_verify(chain),
+        "privacy": {
+            "public_submission": "explicit_user_action",
+            "server_side_discovery": False,
+            "raw_baseband_export": False,
+            "location_included_by_default": False,
+        },
+        "limitations": limitations,
+    }
 
 @app.get("/api/telemetry/recent", dependencies=[Depends(require_local_or_bearer)])
 def recent_telemetry(
