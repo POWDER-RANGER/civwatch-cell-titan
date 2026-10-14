@@ -321,6 +321,53 @@ async def ingest_demo(count: int = Query(1, ge=1, le=100)) -> dict[str, Any]:
         emitted.append(event)
     return {"emitted": len(emitted), "items": emitted, "state": "demo"}
 
+@app.get("/api/observations", dependencies=[Depends(require_local_or_bearer)])
+def user_observations(
+    n: int = Query(100, ge=1, le=500),
+    domain: Domain | None = None,
+) -> dict[str, Any]:
+    """Bounded, privacy-scoped envelope for CIVINTELLIGENCE integration."""
+    samples = buffer.recent(n, domain)
+    if not samples:
+        state = "unavailable"
+    elif all(bool(item.get("metrics", {}).get("demo")) for item in samples):
+        state = "demo"
+    else:
+        state = "live"
+    records = chain.tail(min(n, 100))
+    evidence = [
+        {
+            "seq": item.get("seq"),
+            "ts": item.get("ts"),
+            "kind": item.get("kind"),
+            "hash": item.get("hash"),
+        }
+        for item in records
+    ]
+    limitations = [
+        "Android system metadata is not raw baseband or spectrum capture",
+        "Observations do not by themselves prove interception or malicious activity",
+        "Available fields depend on device, Android version, modem, carrier, and permissions",
+        "No server-side discovery of remote devices is performed by this endpoint",
+    ]
+    return {
+        "schema_version": "1.0",
+        "service": "cell-titan",
+        "state": state,
+        "owner_scope": "user_device",
+        "generated_at": _utc(),
+        "samples": samples,
+        "evidence": evidence,
+        "evidence_verification": cached_verify(chain),
+        "privacy": {
+            "public_submission": "explicit_user_action",
+            "server_side_discovery": False,
+            "raw_baseband_export": False,
+            "location_included_by_default": False,
+        },
+        "limitations": limitations,
+    }
+
 @app.get("/api/telemetry/recent", dependencies=[Depends(require_local_or_bearer)])
 def recent_telemetry(
     n: int = Query(50, ge=1, le=500),
