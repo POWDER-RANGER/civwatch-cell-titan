@@ -125,6 +125,10 @@ curl -s 'http://127.0.0.1:8000/api/evidence/tail?n=20'
 - [civwatch-v3](https://github.com/POWDER-RANGER/civwatch-v3) — predecessor RF dashboard
 - [CIVWATCH](https://github.com/POWDER-RANGER/CIVWATCH) — project site and legacy source
 
+## Documentation standard
+
+Follow the [CIVWATCH Documentation Standard](https://github.com/POWDER-RANGER/CivilianIntelligence/blob/main/docs/DOCUMENTATION_STANDARD.md) for attribution, generated artifacts, historical-status wording, and source/licence provenance.
+
 ## License
 
 MIT
