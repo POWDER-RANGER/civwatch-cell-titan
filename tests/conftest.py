@@ -25,6 +25,7 @@ BASE_ENV: dict[str, str] = {
     "AUTO_DEMO": "false",
     "SENSOR_ID": "test-sensor",
     "EVIDENCE_DIR": os.path.join(_SESSION_DIR, "evidence"),
+    "EVIDENCE_SIGNING_KEY": os.path.join(_SESSION_DIR, "keys", "evidence_ed25519.pem"),
 }
 
 os.environ.update(BASE_ENV)

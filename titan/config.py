@@ -27,6 +27,9 @@ class Settings:
     sensor_id: str
     database_url: str
     evidence_dir: str
+    evidence_signing: bool
+    evidence_signing_key: str
+    evidence_trusted_pubkeys: str
     operator_contact: str
     cors_origins: str
     rate_limit_per_min: int
@@ -49,6 +52,14 @@ class Settings:
         self.sensor_id = os.environ.get("SENSOR_ID", "civwatch-titan-local")
         self.database_url = os.environ.get("DATABASE_URL", "sqlite:///./data/civwatch_titan.db")
         self.evidence_dir = os.environ.get("EVIDENCE_DIR", "./data/evidence")
+        # Ed25519 evidence signing (schema v2). The key lives outside EVIDENCE_DIR
+        # so copying or exporting the evidence never copies the private key.
+        self.evidence_signing = _bool("EVIDENCE_SIGNING", "true")
+        self.evidence_signing_key = os.environ.get(
+            "EVIDENCE_SIGNING_KEY", "./data/keys/evidence_ed25519.pem"
+        )
+        # Previous public keys (base64, comma-separated) still trusted after rotation.
+        self.evidence_trusted_pubkeys = os.environ.get("EVIDENCE_TRUSTED_PUBKEYS", "")
         self.operator_contact = os.environ.get("OPERATOR_CONTACT", "")
         self.cors_origins = os.environ.get(
             "CORS_ORIGINS",

@@ -4,7 +4,7 @@
 
 Cell Monitor runs on your own computer and observes the phone you connect to it. It records cellular, Wi-Fi, D2D and transport-domain telemetry, supports optional ADB collection, streams live events, and keeps a hash-chained, signed evidence log.
 
-> **Status:** 0.1.3 security baseline; loopback-first and fail-closed in production.
+> **Status:** 0.2.0 signed evidence; security baseline; loopback-first and fail-closed in production.
 >
 > Cell Monitor reports what a device you control observed. An alert is an observation with a named rule, not proof: it does not by itself establish that a cell-site simulator or other interceptor is present or absent.
 
@@ -116,7 +116,23 @@ Telemetry events can be sealed into the evidence chain. Verify locally with:
 ~~~bash
 curl -s http://127.0.0.1:8000/api/evidence/verify
 curl -s 'http://127.0.0.1:8000/api/evidence/tail?n=20'
+curl -s http://127.0.0.1:8000/api/evidence/pubkey
 ~~~
+
+Since 0.2.0 every new record is schema v2: hash-chained **and** signed with
+Ed25519 over the record's `hash` (`sig`, `key_id` fields). The private key is
+created on first boot at `EVIDENCE_SIGNING_KEY` (default
+`./data/keys/evidence_ed25519.pem`, mode 0600, outside `EVIDENCE_DIR`). The
+public key is published at `/api/evidence/pubkey` so exported logs can be
+verified offline.
+
+`/api/evidence/verify` reports `signed_records`, `unsigned_records`,
+`signatures` and `fully_signed`. Treat a chain as attested evidence only when
+`fully_signed` is true. Chains started before 0.2.0 keep their unsigned prefix;
+an unsigned record after a signed one fails verification as a downgrade.
+
+Limit: signatures detect edits by anyone without the private key. They do not
+protect against an attacker who can read the key file on the Titan host.
 
 ## Related repositories
 
