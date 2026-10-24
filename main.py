@@ -22,6 +22,7 @@ from titan.adb_collect import collect_cellular, collect_wifi
 from titan.auth import LOCAL_SESSION_COOKIE, assert_boot_auth, is_loopback, local_session_token, require_adb_enabled, require_bearer, require_local_or_bearer, require_privileged, tokens_equal
 from titan.config import settings
 from titan.evidence import EvidenceChain
+from titan.signing import Signer, key_id_for, load_public_key_b64, public_key_b64
 from titan.health_cache import cached_verify
 from titan.live import hub
 from titan.middleware import BodySizeLimitMiddleware, RateLimitMiddleware, SecurityHeadersMiddleware
@@ -33,7 +34,14 @@ DOMAINS: tuple[Domain, ...] = ("cellular", "wifi", "d2d", "transport")
 
 registry = SensorRegistry(settings.sensor_id)
 buffer = SampleBuffer(capacity=2000)
-chain = EvidenceChain(settings.evidence_dir, settings.sensor_id)
+signer = Signer.load_or_create(settings.evidence_signing_key) if settings.evidence_signing else None
+_previous_keys = [load_public_key_b64(k.strip()) for k in settings.evidence_trusted_pubkeys.split(",") if k.strip()]
+chain = EvidenceChain(
+    settings.evidence_dir,
+    settings.sensor_id,
+    signer=signer,
+    trusted_keys={key_id_for(k): k for k in _previous_keys},
+)
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     assert_boot_auth()
@@ -418,6 +426,21 @@ def recent_telemetry(
 @app.get("/api/evidence/verify", dependencies=[Depends(require_local_or_bearer)])
 def evidence_verify() -> dict[str, Any]:
     return chain.verify()
+
+
+@app.get("/api/evidence/pubkey")
+def evidence_pubkey() -> dict[str, Any]:
+    """Public verification key for schema-v2 evidence signatures (not secret)."""
+    if signer is None:
+        return {"algorithm": "Ed25519", "signing": False, "key_id": None, "public_key": None}
+    return {
+        "algorithm": "Ed25519",
+        "signing": True,
+        "key_id": signer.key_id,
+        "public_key": public_key_b64(signer.public_key),
+        "encoding": "base64 raw 32-byte public key",
+        "signed_message": "ASCII bytes of the record's hex `hash` field",
+    }
 
 
 @app.get("/api/evidence/tail", dependencies=[Depends(require_local_or_bearer)])
