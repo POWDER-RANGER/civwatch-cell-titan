@@ -1,0 +1,36 @@
+name: Bug report
+description: Report something that is broken or behaves unexpectedly
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: Describe the problem and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1.
+        2.
+        3.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+  - type: input
+    id: env
+    attributes:
+      label: Environment
+      description: OS, runtime versions
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or output
+      description: Redact keys, tokens, and machine-local paths before pasting.
+      render: shell
