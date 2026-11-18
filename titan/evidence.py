@@ -6,6 +6,10 @@ Design invariants (enforced in tests):
 3. Canonical JSON: sort_keys=True, separators=(',', ':'), UTF-8, no NaN.
 4. Concurrent writers (threads AND processes) serialize via fcntl.flock.
 5. verify() recomputes every link; tip file stores length+last_hash so truncation is detectable.
+6. Schema v2 records add an Ed25519 signature over the record hash (``sig``) and the
+   signing key's id (``key_id``); see ``titan/signing.py``. Signatures are not part
+   of the hash material. Once a chain has a signed record, an unsigned record after
+   it is a downgrade and fails verification.
 """
 from __future__ import annotations
 
@@ -16,9 +20,15 @@ import threading
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
+
+    from titan.signing import Signer
 
 SCHEMA_VERSION = 1
+SIGNED_SCHEMA_VERSION = 2
 GENESIS_HASH = "0" * 64
 
 try:
@@ -67,9 +77,15 @@ class EvidenceRecord:
     prev_hash: str
     hash: str
     schema_version: int = SCHEMA_VERSION
+    sig: str | None = None
+    key_id: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
+        out = asdict(self)
+        if self.sig is None:
+            out.pop("sig")
+            out.pop("key_id")
+        return out
 
 
 class _FileLock:
@@ -102,12 +118,23 @@ class _FileLock:
 class EvidenceChain:
     """Filesystem-backed append-only chain. One JSONL + tip file per sensor_id."""
 
-    def __init__(self, root: str | Path, sensor_id: str) -> None:
+    def __init__(
+        self,
+        root: str | Path,
+        sensor_id: str,
+        signer: "Signer | None" = None,
+        trusted_keys: "dict[str, Ed25519PublicKey] | None" = None,
+    ) -> None:
         if not sensor_id or len(sensor_id) > 128 or "/" in sensor_id or "\\" in sensor_id:
             raise ValueError("sensor_id must be 1..128 chars without path separators")
         self.root = Path(root)
         self.root.mkdir(parents=True, exist_ok=True)
         self.sensor_id = sensor_id
+        self.signer = signer
+        self.trusted_keys: dict[str, Ed25519PublicKey] = dict(trusted_keys or {})
+        if signer is not None:
+            self.trusted_keys.setdefault(signer.key_id, signer.public_key)
+        self.write_schema_version = SIGNED_SCHEMA_VERSION if signer is not None else SCHEMA_VERSION
         self.path = self.root / f"{sensor_id}.jsonl"
         self.tip_path = self.root / f"{sensor_id}.tip.json"
         self.lock_path = self.root / f"{sensor_id}.lock"
@@ -126,7 +153,7 @@ class EvidenceChain:
             return None
 
     def _write_tip(self, seq: int, last_hash: str) -> None:
-        tip = {"seq": seq, "last_hash": last_hash, "schema_version": SCHEMA_VERSION}
+        tip = {"seq": seq, "last_hash": last_hash, "schema_version": self.write_schema_version}
         tmp = self.tip_path.with_suffix(".tip.tmp")
         tmp.write_text(json.dumps(tip, separators=(",", ":")), encoding="utf-8")
         os.replace(tmp, self.tip_path)
@@ -160,6 +187,7 @@ class EvidenceChain:
                 sensor_id=self.sensor_id,
                 body=body,
                 prev_hash=self._last_hash,
+                schema_version=self.write_schema_version,
             )
             h = digest(material)
             rec = EvidenceRecord(
@@ -170,6 +198,9 @@ class EvidenceChain:
                 body=body,
                 prev_hash=self._last_hash,
                 hash=h,
+                schema_version=self.write_schema_version,
+                sig=self.signer.sign_hash(h) if self.signer is not None else None,
+                key_id=self.signer.key_id if self.signer is not None else None,
             )
             line = json.dumps(rec.to_dict(), separators=(",", ":"), ensure_ascii=False, allow_nan=False)
             with self.path.open("a", encoding="utf-8") as f:
@@ -180,22 +211,48 @@ class EvidenceChain:
             self._write_tip(self._seq, h)
             return rec
 
+    def _result(self, ok: bool, length: int, broken_at: Any, signed: int, **extra: Any) -> dict[str, Any]:
+        unsigned = length - signed
+        if signed == 0:
+            signatures = "none"
+        elif self.trusted_keys:
+            signatures = "verified" if ok else "checked"
+        else:
+            signatures = "unchecked"
+        out: dict[str, Any] = {
+            "ok": ok,
+            "length": length,
+            "broken_at": broken_at,
+            "schema_version": self.write_schema_version,
+            "signed_records": signed,
+            "unsigned_records": unsigned,
+            "signatures": signatures,
+            "fully_signed": ok and length > 0 and unsigned == 0 and signatures == "verified",
+        }
+        out.update(extra)
+        return out
+
     def verify(self) -> dict[str, Any]:
+        """Recompute every link, check every signature against ``trusted_keys``.
+
+        ``fully_signed`` is true only when every record is signed by a trusted key;
+        clients should treat only such chains as attested evidence.
+        """
+        from titan.signing import verify_signature
+
         with self._file_lock:
             if not self.path.exists():
                 tip = self._read_tip()
                 if tip and int(tip.get("seq", 0)) > 0:
-                    return {
-                        "ok": False,
-                        "length": 0,
-                        "broken_at": "truncated",
-                        "schema_version": SCHEMA_VERSION,
-                        "detail": "tip expects records but jsonl missing/empty",
-                    }
-                return {"ok": True, "length": 0, "broken_at": None, "schema_version": SCHEMA_VERSION}
+                    return self._result(
+                        False, 0, "truncated", 0, detail="tip expects records but jsonl missing/empty"
+                    )
+                return self._result(True, 0, None, 0)
 
             prev = GENESIS_HASH
             n = 0
+            signed = 0
+            seen_signed = False
             last_hash = GENESIS_HASH
             lines = self.path.read_text(encoding="utf-8").splitlines()
             for line in lines:
@@ -215,28 +272,40 @@ class EvidenceChain:
                 )
                 expected = digest(material)
                 if rec["prev_hash"] != prev or rec["hash"] != expected or int(rec["seq"]) != n:
-                    return {
-                        "ok": False,
-                        "length": n,
-                        "broken_at": rec.get("seq"),
-                        "schema_version": SCHEMA_VERSION,
-                    }
+                    return self._result(False, n, rec.get("seq"), signed)
+
+                if sv >= SIGNED_SCHEMA_VERSION:
+                    sig, key_id = rec.get("sig"), rec.get("key_id")
+                    if not isinstance(sig, str) or not isinstance(key_id, str):
+                        return self._result(False, n, rec.get("seq"), signed, detail="signed record missing sig or key_id")
+                    if self.trusted_keys:
+                        key = self.trusted_keys.get(key_id)
+                        if key is None:
+                            return self._result(False, n, rec.get("seq"), signed, detail=f"unknown signing key {key_id}")
+                        if not verify_signature(key, rec["hash"], sig):
+                            return self._result(False, n, rec.get("seq"), signed, detail="invalid signature")
+                    signed += 1
+                    seen_signed = True
+                elif seen_signed:
+                    return self._result(
+                        False, n, rec.get("seq"), signed, detail="unsigned record after signed records (downgrade)"
+                    )
                 prev = rec["hash"]
                 last_hash = rec["hash"]
 
             tip = self._read_tip()
             if tip is not None:
                 if int(tip.get("seq", -1)) != n or tip.get("last_hash") != last_hash:
-                    return {
-                        "ok": False,
-                        "length": n,
-                        "broken_at": "truncated",
-                        "schema_version": SCHEMA_VERSION,
-                        "detail": "jsonl tip mismatch (possible truncation or rewrite)",
-                        "tip_seq": tip.get("seq"),
-                        "jsonl_seq": n,
-                    }
-            return {"ok": True, "length": n, "broken_at": None, "schema_version": SCHEMA_VERSION}
+                    return self._result(
+                        False,
+                        n,
+                        "truncated",
+                        signed,
+                        detail="jsonl tip mismatch (possible truncation or rewrite)",
+                        tip_seq=tip.get("seq"),
+                        jsonl_seq=n,
+                    )
+            return self._result(True, n, None, signed)
 
     def tip_snapshot(self) -> dict[str, Any]:
         with self._file_lock:

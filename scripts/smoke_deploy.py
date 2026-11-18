@@ -3,7 +3,7 @@
 
 Usage:
     TITAN_API_TOKEN=... python scripts/smoke_deploy.py https://civwatch-cell-titan.onrender.com
-    python scripts/smoke_deploy.py http://127.0.0.1:8000 --expect-version 0.1.3
+    python scripts/smoke_deploy.py http://127.0.0.1:8000 --expect-version 0.2.0
 
 Exit code 0 only when every check passes. Tolerates Render Free cold starts:
 the first request is retried with backoff for up to --wake-timeout seconds.

@@ -11,10 +11,10 @@ The phase is complete only when every gate below has evidence. Deployment state 
 | # | Gate | Evidence required | Status |
 |---|------|-------------------|--------|
 | G1 | Cell Titan CI green on `main` | GitHub Actions run, Python 3.11 + 3.12 | PR #10 green; pending merge |
-| G2 | Render runs current Titan | `smoke_deploy.py --expect-version 0.1.3` → all PASS | pending |
+| G2 | Render runs current Titan | `smoke_deploy.py --expect-version 0.2.0` → all PASS | pending |
 | G3 | Production contract reachable with credentials | `smoke_deploy.py` token checks PASS | pending |
 | G4 | Portal deploy branch contains the Titan UI | CivilianIntelligence PR #63 merged into `deploy/render-public-web` | pending |
-| G5 | Portal consumes the contract server-side | `/titan` shows ONLINE, v0.1.3, evidence verified, no banner | pending |
+| G5 | Portal consumes the contract server-side | `/titan` shows ONLINE, v0.2.0, evidence verified, no banner | pending |
 | G6 | Branches converged | CivilianIntelligence PR #64 merged into `main`; compare shows 0/0 | pending |
 | G7 | One authorized physical-device observation | `device_acceptance.py` → `ACCEPTED 5/5`, report saved | pending — needs operator + phone |
 
@@ -52,7 +52,7 @@ Then, from a clone of the Titan repo, with the production token in the environme
 
 ```bash
 export TITAN_API_TOKEN='<production token>'
-python scripts/smoke_deploy.py https://civwatch-cell-titan.onrender.com --expect-version 0.1.3
+python scripts/smoke_deploy.py https://civwatch-cell-titan.onrender.com --expect-version 0.2.0
 ```
 
 Expected: every line `PASS`, exit code 0. The script waits up to 120s for a cold start. `version matches` failing means the old build is still serving.

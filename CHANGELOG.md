@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.2.0 — signed evidence (2026-10-24)
+
+- Evidence records are now schema v2: Ed25519 signature over the record hash
+  (`sig`, `key_id`). A hash chain alone can be rebuilt by anyone with write
+  access; a forged chain with recomputed hashes now fails verification.
+- Key: `EVIDENCE_SIGNING_KEY` (default `./data/keys/evidence_ed25519.pem`),
+  created with mode 0600 on first boot. `EVIDENCE_SIGNING=false` disables signing.
+  `EVIDENCE_TRUSTED_PUBKEYS` keeps previous keys trusted after rotation.
+- New `GET /api/evidence/pubkey` (public) for offline verification.
+- `verify()` adds `signed_records`, `unsigned_records`, `signatures`,
+  `fully_signed`; rejects unknown keys, missing signatures and unsigned records
+  after signed ones (downgrade). Legacy v1 prefixes still verify.
+- Tests: 12 new (forgery with rebuilt hashes, downgrade, rotation, unknown key,
+  key file permissions, API pubkey round-trip).
+
 ## 0.1.3 — green CI + deploy verification (2026-10-13)
 
 - Fix: `titan.config.settings` now reloads **in place**. Tests previously used
